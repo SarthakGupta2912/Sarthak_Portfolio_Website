@@ -1,3 +1,0 @@
-# sarthak_portfolio
-
-Portfolio
