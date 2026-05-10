@@ -1,7 +1,7 @@
 name: sarthak_portfolio
 description: "Portfolio"
 publish_to: 'none'
-version: 0.1.0
+version: 1.0.0+1
 
 environment:
   sdk: ^3.10.3
@@ -11,11 +11,16 @@ dependencies:
     sdk: flutter
   google_fonts: ^8.1.0
   url_launcher: ^6.3.2
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+flutter_launcher_icons:
+  web:
+    generate: true
+    image_path: "assets/SarthakPic.jpeg"
 flutter:
   uses-material-design: true

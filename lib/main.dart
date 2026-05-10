@@ -906,26 +906,36 @@ class SkillsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double headerGap = (media.height * 0.045).clamp(24.0, 60.0);
-    final int cols = media.width > 800 ? 3 : 1;
-    final double gridSpacing = (media.width * 0.020).clamp(12.0, 30.0);
-    final double childAspect = cols == 3
-        ? 0.85
-        : (media.width / (media.height * 0.55)).clamp(0.7, 1.8);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(number: '02', title: 'Arsenal', media: media),
         SizedBox(height: headerGap),
-        GridView.count(
-          crossAxisCount: cols,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: gridSpacing,
-          crossAxisSpacing: gridSpacing,
-          childAspectRatio: childAspect,
-          children: [
-            TiltCard(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final double availableWidth = constraints.maxWidth;
+            final bool isMobile = availableWidth <= 800;
+            final double cardSpacing = (availableWidth * 0.020).clamp(
+              12.0,
+              30.0,
+            );
+
+            // Card builder — no cardWidth needed
+            TiltCard buildCard({
+              required IconData icon,
+              required Color iconColor,
+              required String title,
+              required List<String> skills,
+            }) => TiltCard(
+              icon: icon,
+              iconColor: iconColor,
+              title: title,
+              skills: skills,
+              media: media,
+            );
+
+            final c0 = buildCard(
               icon: Icons.phone_android_rounded,
               iconColor: const Color(0xFF00E5FF),
               title: 'Mobile & Web',
@@ -935,33 +945,93 @@ class SkillsSection extends StatelessWidget {
                 'Firebase & REST APIs',
                 'Payment Integration',
               ],
-              media: media,
-            ),
-            TiltCard(
+            );
+            final c1 = buildCard(
               icon: Icons.sports_esports_rounded,
               iconColor: Colors.purpleAccent,
               title: 'Game Dev',
               skills: const [
                 'Unity Engine',
                 'C# Scripting',
-                'Cinemachine & Physics',
+                'Gameplay Mechanics & Physics',
                 'Object Pooling',
               ],
-              media: media,
-            ),
-            TiltCard(
+            );
+            final c2 = buildCard(
               icon: Icons.terminal_rounded,
               iconColor: Colors.grey,
               title: 'Core Languages',
               skills: const [
                 'Java & C/C++',
-                'SQL / MySQL',
                 'Data Structures',
-                'Agile & Git',
+                'Problem Solving',
+                'SQL / MySQL',
               ],
-              media: media,
-            ),
-          ],
+            );
+            final c3 = buildCard(
+              icon: Icons.psychology_rounded,
+              iconColor: const Color(0xFFFFB347),
+              title: 'AI & ML',
+              skills: const [
+                'LLM Integration',
+                'RAG Systems',
+                'Model Fine-tuning',
+                'Model Context Protocol (MCP)',
+              ],
+            );
+
+            // Mobile: single column
+            if (isMobile) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [c0, c1, c2, c3]
+                    .map(
+                      (c) => Padding(
+                        padding: EdgeInsets.only(bottom: cardSpacing),
+                        child: c,
+                      ),
+                    )
+                    .toList(),
+              );
+            }
+
+            // Desktop — Expanded handles all width math, overflow is impossible
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Row 1: all three cards, equal width via Expanded
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: c0),
+                      SizedBox(width: cardSpacing),
+                      Expanded(child: c1),
+                      SizedBox(width: cardSpacing),
+                      Expanded(child: c2),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: cardSpacing),
+
+                // Row 2: invisible Expanded spacer + card[3] + invisible Expanded spacer
+                // This keeps card[3] centred under card[1] at exactly 1/3 width
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Expanded(child: SizedBox.shrink()), // col 0 ghost
+                      SizedBox(width: cardSpacing),
+                      Expanded(child: c3), // col 1 = under c1
+                      SizedBox(width: cardSpacing),
+                      const Expanded(child: SizedBox.shrink()), // col 2 ghost
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -977,6 +1047,7 @@ class TiltCard extends StatefulWidget {
   final String title;
   final List<String> skills;
   final Size media;
+  // ← cardWidth removed
 
   const TiltCard({
     super.key,
@@ -1016,6 +1087,7 @@ class _TiltCardState extends State<TiltCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
+          // ← No width set here. Parent (Expanded) controls it.
           padding: EdgeInsets.all(pad),
           decoration: BoxDecoration(
             color: const Color(0xFF0A0A0C),
@@ -1026,49 +1098,48 @@ class _TiltCardState extends State<TiltCard> {
                   : Colors.white.withOpacity(0.05),
             ),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(widget.icon, color: widget.iconColor, size: iconSize),
-                SizedBox(height: innerGap1),
-                Text(
-                  widget.title,
-                  style: TextStyle(
-                    fontSize: titleSize,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, color: widget.iconColor, size: iconSize),
+              SizedBox(height: innerGap1),
+              Text(
+                widget.title,
+                style: TextStyle(
+                  fontSize: titleSize,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
-                SizedBox(height: innerGap2),
-                ...widget.skills.map(
-                  (s) => Padding(
-                    padding: EdgeInsets.only(bottom: skillBottomPad),
-                    child: Row(
-                      children: [
-                        Text(
-                          '▹',
-                          style: TextStyle(
-                            color: widget.iconColor,
-                            fontSize: skillArrowSize,
+              ),
+              SizedBox(height: innerGap2),
+              ...widget.skills.map(
+                (s) => Padding(
+                  padding: EdgeInsets.only(bottom: skillBottomPad),
+                  child: Row(
+                    children: [
+                      Text(
+                        '▹',
+                        style: TextStyle(
+                          color: widget.iconColor,
+                          fontSize: skillArrowSize,
+                        ),
+                      ),
+                      SizedBox(width: skillIconGap),
+                      Expanded(
+                        child: Text(
+                          s,
+                          style: GoogleFonts.poppins(
+                            fontSize: skillSize,
+                            color: Colors.grey[400],
                           ),
                         ),
-                        SizedBox(width: skillIconGap),
-                        Expanded(
-                          child: Text(
-                            s,
-                            style: GoogleFonts.poppins(
-                              fontSize: skillSize,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
