@@ -1,6 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -31,25 +29,6 @@ class SarthakPortfolio extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Responsive helpers – derive everything from MediaQuery.size
 // ---------------------------------------------------------------------------
-
-/// Returns a value clamped between [min] and [max], scaled by [factor] of
-/// the screen's shorter dimension (width on portrait, height on landscape).
-double _scaled(
-  BuildContext context,
-  double factor, {
-  double min = 0,
-  double max = double.infinity,
-}) {
-  final size = MediaQuery.of(context).size;
-  return (size.shortestSide * factor).clamp(min, max);
-}
-
-/// True when the screen width is below 800 logical pixels.
-bool _isMobile(BuildContext context) => MediaQuery.of(context).size.width < 800;
-
-/// True when the sidebar (≥ 1200 px) should be shown.
-bool _showSidebar(BuildContext context) =>
-    MediaQuery.of(context).size.width >= 1200;
 
 // ---------------------------------------------------------------------------
 // Lens animation state
@@ -224,7 +203,6 @@ class _PortfolioHomeState extends State<PortfolioHome> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
-    final bool isMobile = media.width < 800;
     final bool showSidebar = media.width >= 1200;
 
     // Responsive horizontal padding: 2.4% of width, clamped 16–64 px
@@ -361,7 +339,7 @@ class _PortfolioHomeState extends State<PortfolioHome> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
+                                  color: Colors.white.withValues(alpha: 0.3),
                                 ),
                               ),
                             ),
@@ -491,7 +469,7 @@ class LensPainter extends CustomPainter {
       final bool inRadius = active && (dx * dx + dy * dy) < _radiusThresholdSq;
 
       _paint.color = (inRadius ? const Color(0xFF00E5FF) : Colors.white)
-          .withOpacity(dot.intensity.clamp(0.0, 1.0));
+          .withValues(alpha: dot.intensity.clamp(0.0, 1.0));
 
       canvas.drawCircle(Offset(dot.x, dot.y), _dotRadius, _paint);
     }
@@ -586,8 +564,6 @@ class HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isMobile = media.width < 800;
-
     // Responsive font sizes – clamp ensures nothing breaks at extremes
     final double nameFontSize = (media.width * 0.075).clamp(28.0, 90.0);
     final double subtitleFontSize = (media.width * 0.026).clamp(14.0, 32.0);
@@ -640,7 +616,7 @@ class HeroSection extends StatelessWidget {
             ),
             ListenableBuilder(
               listenable: lensState,
-              builder: (_, __) => GestureDetector(
+              builder: (_, _) => GestureDetector(
                 onTap: () {
                   lensState.isActive = !lensState.isActive;
                   lensState.notifyListeners();
@@ -813,8 +789,8 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         borderRadius: BorderRadius.circular(4),
       ),
       child: child,
@@ -842,7 +818,7 @@ class _SocialIconButton extends StatelessWidget {
       child: IconButton(
         onPressed: onTap,
         icon: Icon(icon, color: Colors.grey[400], size: iconSize),
-        hoverColor: Colors.white.withOpacity(0.05),
+        hoverColor: Colors.white.withValues(alpha: 0.05),
         splashRadius: iconSize,
       ),
     );
@@ -1094,8 +1070,8 @@ class _TiltCardState extends State<TiltCard> {
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
               color: _hovered
-                  ? Colors.white.withOpacity(0.15)
-                  : Colors.white.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.15)
+                  : Colors.white.withValues(alpha: 0.05),
             ),
           ),
           child: Column(
@@ -1168,7 +1144,7 @@ class ExperienceSection extends StatelessWidget {
           margin: EdgeInsets.only(left: (media.width * 0.008).clamp(4.0, 12.0)),
           decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: Colors.white.withOpacity(0.1)),
+              left: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
             ),
           ),
           child: Column(
@@ -1495,8 +1471,8 @@ class _ProjectCardState extends State<ProjectCard> {
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: _hovered
-                    ? Colors.white.withOpacity(0.15)
-                    : Colors.white.withOpacity(0.05),
+                    ? Colors.white.withValues(alpha: 0.15)
+                    : Colors.white.withValues(alpha: 0.05),
               ),
             ),
             child: Column(
