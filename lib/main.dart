@@ -38,7 +38,7 @@ class LensAnimationState extends ChangeNotifier {
   Offset _targetPos = const Offset(-1000, -1000);
   bool isActive = true;
 
-  List<_Dot> dots = [];
+  final List<_Dot> _dots = [];
   bool _initialized = false;
 
   Offset get smoothedPos => _smoothedPos;
@@ -47,9 +47,14 @@ class LensAnimationState extends ChangeNotifier {
     _targetPos = pos;
   }
 
+  void toggleActive() {
+    isActive = !isActive;
+    notifyListeners();
+  }
+
   void resetGrid() {
     _initialized = false;
-    dots.clear();
+    _dots.clear();
   }
 
   void initGrid(Size size, double spacing) {
@@ -57,7 +62,7 @@ class LensAnimationState extends ChangeNotifier {
     _initialized = true;
     for (double x = 0; x < size.width + spacing; x += spacing) {
       for (double y = 0; y < size.height + spacing; y += spacing) {
-        dots.add(_Dot(baseX: x, baseY: y, x: x, y: y));
+        _dots.add(_Dot(baseX: x, baseY: y, x: x, y: y));
       }
     }
   }
@@ -86,7 +91,7 @@ class LensAnimationState extends ChangeNotifier {
     const double radius = 220;
     const double radiusSq = radius * radius;
 
-    for (final dot in dots) {
+    for (final dot in _dots) {
       final double dx = _smoothedPos.dx - dot.baseX;
       final double dy = _smoothedPos.dy - dot.baseY;
       final double distSq = dx * dx + dy * dy;
@@ -463,7 +468,7 @@ class LensPainter extends CustomPainter {
     final Offset mouse = repaint.smoothedPos;
     final bool active = repaint.isActive;
 
-    for (final dot in repaint.dots) {
+    for (final dot in repaint._dots) {
       final double dx = mouse.dx - dot.baseX;
       final double dy = mouse.dy - dot.baseY;
       final bool inRadius = active && (dx * dx + dy * dy) < _radiusThresholdSq;
@@ -617,10 +622,7 @@ class HeroSection extends StatelessWidget {
             ListenableBuilder(
               listenable: lensState,
               builder: (_, _) => GestureDetector(
-                onTap: () {
-                  lensState.isActive = !lensState.isActive;
-                  lensState.notifyListeners();
-                },
+                onTap: lensState.toggleActive,
                 child: _Badge(
                   hPad: badgeHPad,
                   vPad: badgeVPad,
@@ -975,35 +977,32 @@ class SkillsSection extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Row 1: all three cards, equal width via Expanded
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: c0),
-                      SizedBox(width: cardSpacing),
-                      Expanded(child: c1),
-                      SizedBox(width: cardSpacing),
-                      Expanded(child: c2),
-                    ],
-                  ),
+                // Row 1: all three cards, equal width via Expanded.
+                // Let each card size to wrapped text instead of forcing a height.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: c0),
+                    SizedBox(width: cardSpacing),
+                    Expanded(child: c1),
+                    SizedBox(width: cardSpacing),
+                    Expanded(child: c2),
+                  ],
                 ),
 
                 SizedBox(height: cardSpacing),
 
                 // Row 2: invisible Expanded spacer + card[3] + invisible Expanded spacer
                 // This keeps card[3] centred under card[1] at exactly 1/3 width
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Expanded(child: SizedBox.shrink()), // col 0 ghost
-                      SizedBox(width: cardSpacing),
-                      Expanded(child: c3), // col 1 = under c1
-                      SizedBox(width: cardSpacing),
-                      const Expanded(child: SizedBox.shrink()), // col 2 ghost
-                    ],
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(child: SizedBox.shrink()), // col 0 ghost
+                    SizedBox(width: cardSpacing),
+                    Expanded(child: c3), // col 1 = under c1
+                    SizedBox(width: cardSpacing),
+                    const Expanded(child: SizedBox.shrink()), // col 2 ghost
+                  ],
                 ),
               ],
             );
