@@ -16,7 +16,7 @@ void main() {
     expect(find.text('Sarthak Gupta.'), findsOneWidget);
     expect(find.text('Fridge Roulette'), findsOneWidget);
     expect(find.text('LIMS'), findsOneWidget);
-    expect(find.text('Hardware-Integrated Cart'), findsOneWidget);
+    expect(find.text('PathKosh'), findsOneWidget);
     expect(find.text('More on GitHub'), findsOneWidget);
   });
 
@@ -29,7 +29,12 @@ void main() {
     await tester.pumpWidget(const SarthakPortfolio());
     await tester.pump();
 
-    final Finder footers = find.text('View source');
+    final Finder footers = find.byWidgetPredicate(
+      (widget) =>
+          widget is Text &&
+          (widget.data == 'View source' ||
+              widget.data == 'View on Google Play'),
+    );
     expect(footers, findsNWidgets(3));
 
     for (int i = 0; i < 3; i++) {

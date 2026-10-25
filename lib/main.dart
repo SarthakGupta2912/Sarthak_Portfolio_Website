@@ -1389,19 +1389,27 @@ class ProjectsSection extends StatelessWidget {
         link: 'https://github.com/SarthakGupta2912/LIMS',
       ),
       _ProjectData(
-        title: 'Hardware-Integrated Cart',
-        tagline: 'Checkout secured by a physical GSM modem',
+        title: 'PathKosh',
+        tagline: 'AI skill trees for any learning goal',
         description:
-            'A software ordering application showcasing unique hardware integration, capable of validating customer transactions securely via OTP using a physical GSM modem.',
+            'PathKosh turns a big goal into a clear skill tree. Tell Forge AI what you want to learn, your level and timeline, and it builds a step-by-step roadmap with prerequisites, difficulty, time estimates and XP. Chat for guidance, track progress, and pick up where you left off — in English or Hindi.',
         highlights: const [
-          'OTP-verified checkout through a physical GSM modem',
-          'End-to-end ordering flow backed by MySQL',
+          'AI roadmaps and coaching through user-chosen OpenRouter models',
+          'Prerequisite-locked steps with difficulty, time and XP',
+          'Live on Google Play with saved progress and no data collected',
         ],
-        tags: const ['Java', 'MySQL', 'GSM Hardware API'],
-        status: 'Java • Hardware',
-        accentColor: Colors.purpleAccent,
-        icon: Icons.layers_rounded,
-        link: 'https://github.com/SarthakGupta2912/ShoppingCart',
+        tags: const [
+          'Flutter',
+          'OpenRouter AI',
+          'Google Play',
+          'English + Hindi',
+        ],
+        status: 'Google Play • Live',
+        accentColor: const Color(0xFFE6BE8A),
+        icon: Icons.account_tree_rounded,
+        link:
+            'https://play.google.com/store/apps/details?id=com.Sarthak.pathkosh',
+        ctaLabel: 'View on Google Play',
       ),
     ];
 
@@ -1485,6 +1493,7 @@ class _ProjectData {
   final Color accentColor;
   final IconData icon;
   final String link;
+  final String ctaLabel;
 
   const _ProjectData({
     required this.title,
@@ -1496,6 +1505,7 @@ class _ProjectData {
     required this.accentColor,
     required this.icon,
     required this.link,
+    this.ctaLabel = 'View source',
   });
 }
 
@@ -1668,7 +1678,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                 Row(
                   children: [
                     Text(
-                      'View source',
+                      project.ctaLabel,
                       style: GoogleFonts.poppins(
                         fontSize: taglineSize,
                         color: _hovered ? Colors.white : Colors.grey[500],
