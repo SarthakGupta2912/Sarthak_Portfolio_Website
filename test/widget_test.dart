@@ -20,6 +20,34 @@ void main() {
     expect(find.text('More on GitHub'), findsOneWidget);
   });
 
+  testWidgets('keeps the source link inside every project card', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pump();
+
+    final Finder footers = find.text('View source');
+    expect(footers, findsNWidgets(3));
+
+    for (int i = 0; i < 3; i++) {
+      final Rect footerRect = tester.getRect(footers.at(i));
+      final Rect cardRect = tester.getRect(
+        find
+            .ancestor(
+              of: footers.at(i),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first,
+      );
+
+      expect(footerRect.bottom, lessThan(cardRect.bottom));
+      expect(footerRect.right, lessThanOrEqualTo(cardRect.right));
+    }
+  });
+
   for (final Size size in const [
     Size(360, 800),
     Size(768, 1024),

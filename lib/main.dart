@@ -893,7 +893,7 @@ class SkillsSection extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             final double availableWidth = constraints.maxWidth;
-            final bool isMobile = availableWidth <= 800;
+            final bool isMobile = availableWidth < 760;
             final double cardSpacing = (availableWidth * 0.020).clamp(
               12.0,
               30.0,
@@ -974,15 +974,16 @@ class SkillsSection extends StatelessWidget {
             }
 
             // Desktop / tablet: balanced 2 × 2 grid with equal-height rows
+            final double cardWidth = (availableWidth - cardSpacing) / 2;
             return Column(
               children: [
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: c0),
+                      SizedBox(width: cardWidth, child: c0),
                       SizedBox(width: cardSpacing),
-                      Expanded(child: c1),
+                      SizedBox(width: cardWidth, child: c1),
                     ],
                   ),
                 ),
@@ -991,9 +992,9 @@ class SkillsSection extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: c2),
+                      SizedBox(width: cardWidth, child: c2),
                       SizedBox(width: cardSpacing),
-                      Expanded(child: c3),
+                      SizedBox(width: cardWidth, child: c3),
                     ],
                   ),
                 ),
@@ -1428,17 +1429,21 @@ class ProjectsSection extends StatelessWidget {
               );
             }
 
+            final double cardWidth = (constraints.maxWidth - cardSpacing) / 2;
+
             return Column(
               children: [
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
+                      SizedBox(
+                        width: cardWidth,
                         child: _ProjectCard(project: projects[0], media: media),
                       ),
                       SizedBox(width: cardSpacing),
-                      Expanded(
+                      SizedBox(
+                        width: cardWidth,
                         child: _ProjectCard(project: projects[1], media: media),
                       ),
                     ],
@@ -1449,11 +1454,15 @@ class ProjectsSection extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
+                      SizedBox(
+                        width: cardWidth,
                         child: _ProjectCard(project: projects[2], media: media),
                       ),
                       SizedBox(width: cardSpacing),
-                      Expanded(child: _MoreOnGitHubCard(media: media)),
+                      SizedBox(
+                        width: cardWidth,
+                        child: _MoreOnGitHubCard(media: media),
+                      ),
                     ],
                   ),
                 ),
