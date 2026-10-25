@@ -3,17 +3,27 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sarthak_portfolio/main.dart';
 
+void _useSize(WidgetTester tester, Size size) {
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = size;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   testWidgets('renders the hero and every featured build', (
     WidgetTester tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(1440, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    _useSize(tester, const Size(1440, 900));
 
     await tester.pumpWidget(const SarthakPortfolio());
     await tester.pump();
 
-    expect(find.text('Sarthak Gupta.'), findsOneWidget);
+    expect(find.text('Sarthak Gupta.', findRichText: true), findsOneWidget);
+    expect(
+      find.image(const AssetImage('assets/hero_portrait.jpg')),
+      findsOneWidget,
+    );
     expect(find.text('Fridge Roulette'), findsOneWidget);
     expect(find.text('LIMS'), findsOneWidget);
     expect(find.text('PathKosh'), findsOneWidget);
@@ -23,8 +33,7 @@ void main() {
   testWidgets('keeps the source link inside every project card', (
     WidgetTester tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(900, 1200));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    _useSize(tester, const Size(900, 1200));
 
     await tester.pumpWidget(const SarthakPortfolio());
     await tester.pump();
@@ -61,8 +70,7 @@ void main() {
     testWidgets(
       'lays out without overflow at ${size.width.toInt()}x${size.height.toInt()}',
       (WidgetTester tester) async {
-        await tester.binding.setSurfaceSize(size);
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+        _useSize(tester, size);
 
         await tester.pumpWidget(const SarthakPortfolio());
         await tester.pump();

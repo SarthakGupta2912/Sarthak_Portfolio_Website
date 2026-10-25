@@ -562,6 +562,8 @@ class _NavButtonState extends State<_NavButton> {
 // Hero section
 // ---------------------------------------------------------------------------
 class HeroSection extends StatelessWidget {
+  static const Color accent = Color(0xFF00E5FF);
+
   final LensAnimationState lensState;
   final Size media;
 
@@ -569,51 +571,51 @@ class HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Responsive font sizes – clamp ensures nothing breaks at extremes
-    final double nameFontSize = (media.width * 0.075).clamp(28.0, 90.0);
-    final double subtitleFontSize = (media.width * 0.026).clamp(14.0, 32.0);
-    final double badgeFontSize = (media.shortestSide * 0.014).clamp(9.0, 14.0);
-    final double badgeIconSize = (media.shortestSide * 0.014).clamp(9.0, 16.0);
-    final double badgeHPad = (media.width * 0.010).clamp(8.0, 16.0);
-    final double badgeVPad = (media.height * 0.006).clamp(4.0, 10.0);
-    final double badgeSpacing = (media.width * 0.012).clamp(6.0, 16.0);
-    final double gap1 = (media.height * 0.030).clamp(16.0, 40.0);
-    final double gap2 = (media.height * 0.025).clamp(14.0, 32.0);
-    final double gap3 = (media.height * 0.045).clamp(24.0, 60.0);
-    final double btnHPad = (media.width * 0.020).clamp(12.0, 28.0);
-    final double btnVPad = (media.height * 0.018).clamp(10.0, 22.0);
-    final double socialIconSize = (media.shortestSide * 0.028).clamp(
-      18.0,
-      30.0,
-    );
+    final bool wide = media.width >= 1060;
+    final double nameFontSize = wide
+        ? (media.width * 0.055).clamp(46.0, 76.0)
+        : (media.width * 0.075).clamp(30.0, 84.0);
+    final double subtitleFontSize = wide
+        ? (media.width * 0.020).clamp(15.0, 26.0)
+        : (media.width * 0.026).clamp(14.0, 28.0);
+    final double pillFontSize = (media.shortestSide * 0.0135).clamp(9.0, 13.0);
+    final double gapBadge = (media.height * 0.026).clamp(16.0, 32.0);
+    final double gapEyebrow = (media.height * 0.016).clamp(10.0, 20.0);
+    final double gapName = (media.height * 0.020).clamp(12.0, 24.0);
+    final double gapCta = (media.height * 0.040).clamp(24.0, 52.0);
+    final double gapStack = (media.height * 0.026).clamp(16.0, 34.0);
+    final double buttonHPad = (media.width * 0.016).clamp(14.0, 24.0);
+    final double buttonVPad = (media.height * 0.016).clamp(12.0, 18.0);
+    final double buttonFont = (media.shortestSide * 0.015).clamp(11.0, 15.0);
+    final double socialSize = (media.shortestSide * 0.050).clamp(38.0, 46.0);
+    final double eyebrowSize = (media.shortestSide * 0.0125).clamp(8.5, 11.5);
+    final double stackSize = (media.shortestSide * 0.0115).clamp(8.0, 11.5);
+    final bool compactHero = media.width < 480;
 
-    return Column(
+    final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: badgeSpacing,
-          runSpacing: badgeSpacing * 0.6,
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            _Badge(
-              hPad: badgeHPad,
-              vPad: badgeVPad,
+            _HeroPill(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: badgeIconSize * 0.55,
-                    height: badgeIconSize * 0.55,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF00E5FF),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  SizedBox(width: badgeHPad * 0.65),
-                  Text(
-                    'Available for Opportunities',
-                    style: GoogleFonts.poppins(
-                      fontSize: badgeFontSize,
-                      color: Colors.grey[400],
+                  const _PulseDot(size: 7),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      compactHero
+                          ? 'Open to work'
+                          : 'Available for opportunities',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: pillFontSize,
+                        color: Colors.grey[300],
+                      ),
                     ),
                   ),
                 ],
@@ -621,63 +623,101 @@ class HeroSection extends StatelessWidget {
             ),
             ListenableBuilder(
               listenable: lensState,
-              builder: (_, _) => GestureDetector(
+              builder: (_, _) => _HeroPill(
                 onTap: lensState.toggleActive,
-                child: _Badge(
-                  hPad: badgeHPad,
-                  vPad: badgeVPad,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        lensState.isActive
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                        size: badgeIconSize,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      lensState.isActive
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: pillFontSize + 4,
+                      color: Colors.grey[500],
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Lens illusion',
+                      style: GoogleFonts.poppins(
+                        fontSize: pillFontSize,
                         color: Colors.grey[400],
                       ),
-                      SizedBox(width: badgeHPad * 0.65),
-                      Text(
-                        'Toggle Lens Illusion',
-                        style: GoogleFonts.poppins(
-                          fontSize: badgeFontSize,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
         ),
-        SizedBox(height: gap1),
-        Text(
-          'Sarthak Gupta.',
-          style: TextStyle(
-            fontSize: nameFontSize,
-            fontWeight: FontWeight.bold,
-            letterSpacing: nameFontSize * -0.025,
-            height: 1.0,
-            color: Colors.white,
+        SizedBox(height: gapBadge),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 26,
+              height: 2,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 11),
+            Text(
+              'SOFTWARE ENGINEER',
+              style: GoogleFonts.poppins(
+                fontSize: eyebrowSize,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 2.6,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: gapEyebrow),
+        RichText(
+          text: TextSpan(
+            style: TextStyle(
+              fontSize: nameFontSize,
+              fontWeight: FontWeight.w800,
+              letterSpacing: nameFontSize * -0.035,
+              height: 1.0,
+              color: Colors.white,
+            ),
+            children: [
+              const TextSpan(text: 'Sarthak Gupta'),
+              TextSpan(
+                text: '.',
+                style: TextStyle(color: accent.withValues(alpha: 0.9)),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: gap2),
+        SizedBox(height: gapName),
         RichText(
           text: TextSpan(
             style: TextStyle(
               fontSize: subtitleFontSize,
               color: Colors.grey[400],
               fontWeight: FontWeight.w300,
-              height: 1.4,
+              height: 1.45,
             ),
-            children: const [
-              TextSpan(
-                text:
-                    'I build offline-first products, on-device AI and immersive experiences across ',
+            children: [
+              const TextSpan(text: 'I build '),
+              const TextSpan(
+                text: 'offline-first products',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
+              const TextSpan(text: ', '),
               TextSpan(
-                text: 'Mobile, Desktop, and Game engines.',
+                text: 'on-device AI',
+                style: TextStyle(color: accent, fontWeight: FontWeight.w500),
+              ),
+              const TextSpan(text: ' and immersive experiences across '),
+              const TextSpan(
+                text: 'mobile, desktop and game engines.',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w500,
@@ -686,85 +726,51 @@ class HeroSection extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: gap3),
+        SizedBox(height: gapCta),
         Wrap(
-          spacing: (media.width * 0.020).clamp(12.0, 28.0),
-          runSpacing: (media.height * 0.016).clamp(10.0, 20.0),
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            // ── Get in Touch ────────────────────────────────────────────────
-            ElevatedButton.icon(
-              onPressed: () =>
+            _HeroActionButton(
+              label: 'Get in touch',
+              icon: Icons.arrow_outward_rounded,
+              primary: true,
+              fontSize: buttonFont,
+              hPad: buttonHPad,
+              vPad: buttonVPad,
+              onTap: () =>
                   launchUrl(Uri.parse('mailto:sarthakgupta2912@gmail.com')),
-              icon: Icon(
-                Icons.mail_outline_rounded,
-                size: (media.shortestSide * 0.022).clamp(14.0, 22.0),
-              ),
-              label: Text(
-                'Get in Touch',
-                style: TextStyle(
-                  fontSize: (media.shortestSide * 0.016).clamp(11.0, 16.0),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: EdgeInsets.symmetric(
-                  horizontal: btnHPad,
-                  vertical: btnVPad,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
             ),
-
-            // ── Resume Download ─────────────────────────────────────────────
-            ElevatedButton.icon(
-              onPressed: () => launchUrl(
+            _HeroActionButton(
+              label: 'Resume',
+              icon: Icons.file_download_outlined,
+              fontSize: buttonFont,
+              hPad: buttonHPad,
+              vPad: buttonVPad,
+              onTap: () => launchUrl(
                 Uri.parse(
                   'https://drive.google.com/file/d/1oTVVP0BWlnSpawTK0GNRwbL3xR1U5-ns/view?usp=sharing',
                 ),
                 mode: LaunchMode.externalApplication,
               ),
-              icon: Icon(
-                Icons.file_download_outlined,
-                size: (media.shortestSide * 0.022).clamp(14.0, 22.0),
-              ),
-              label: Text(
-                'Resume',
-                style: TextStyle(
-                  fontSize: (media.shortestSide * 0.016).clamp(11.0, 16.0),
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: EdgeInsets.symmetric(
-                  horizontal: btnHPad,
-                  vertical: btnVPad,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
             ),
-
-            // ── Social icons ────────────────────────────────────────────────
+            const SizedBox(width: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _SocialIconButton(
                   icon: Icons.code_rounded,
-                  iconSize: socialIconSize,
+                  size: socialSize,
                   tooltip: 'GitHub',
                   onTap: () => launchUrl(
                     Uri.parse('https://github.com/SarthakGupta2912'),
                   ),
                 ),
-                SizedBox(width: (media.width * 0.006).clamp(4.0, 10.0)),
+                const SizedBox(width: 10),
                 _SocialIconButton(
                   icon: Icons.work_outline_rounded,
-                  iconSize: socialIconSize,
+                  size: socialSize,
                   tooltip: 'LinkedIn',
                   onTap: () => launchUrl(
                     Uri.parse('https://www.linkedin.com/in/sarthakgupta2912/'),
@@ -774,54 +780,399 @@ class HeroSection extends StatelessWidget {
             ),
           ],
         ),
+        SizedBox(height: gapStack),
+        Row(
+          children: [
+            Container(
+              width: 22,
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.16),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                'FLUTTER   ·   DART   ·   LITERT   ·   SQLITE   ·   UNITY',
+                style: GoogleFonts.poppins(
+                  fontSize: stackSize,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1.3,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    if (!wide) return content;
+
+    final double portraitWidth = (media.width * 0.245).clamp(250.0, 330.0);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: content),
+        SizedBox(width: (media.width * 0.040).clamp(32.0, 56.0)),
+        _HeroPortrait(width: portraitWidth, captionSize: pillFontSize),
       ],
     );
   }
 }
 
-class _Badge extends StatelessWidget {
-  final Widget child;
-  final double hPad;
-  final double vPad;
+class _HeroPortrait extends StatelessWidget {
+  final double width;
+  final double captionSize;
 
-  const _Badge({required this.child, required this.hPad, required this.vPad});
+  const _HeroPortrait({required this.width, required this.captionSize});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: child,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          left: 12,
+          top: 12,
+          right: -12,
+          bottom: -12,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: HeroSection.accent.withValues(alpha: 0.32),
+              ),
+            ),
+          ),
+        ),
+        Container(
+          width: width,
+          height: width * 1.25,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+            boxShadow: [
+              BoxShadow(
+                color: HeroSection.accent.withValues(alpha: 0.10),
+                blurRadius: 70,
+                spreadRadius: -18,
+                offset: const Offset(0, 24),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 40,
+                offset: const Offset(0, 20),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  'assets/hero_portrait.jpg',
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  filterQuality: FilterQuality.medium,
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Color(0xE6050505), Color(0x00050505)],
+                      stops: [0.0, 0.55],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: 16,
+                  child: Row(
+                    children: [
+                      const _PulseDot(size: 6),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'BASED IN INDIA',
+                          style: GoogleFonts.poppins(
+                            fontSize: captionSize * 0.82,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.8,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _SocialIconButton extends StatelessWidget {
+class _HeroPill extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _HeroPill({required this.child, this.onTap});
+
+  @override
+  State<_HeroPill> createState() => _HeroPillState();
+}
+
+class _HeroPillState extends State<_HeroPill> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: widget.onTap == null
+          ? MouseCursor.defer
+          : SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: _hovered ? 0.07 : 0.035),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: _hovered ? 0.25 : 0.10),
+            ),
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroActionButton extends StatefulWidget {
+  final String label;
   final IconData icon;
-  final double iconSize;
+  final bool primary;
+  final double fontSize;
+  final double hPad;
+  final double vPad;
+  final VoidCallback onTap;
+
+  const _HeroActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    required this.fontSize,
+    required this.hPad,
+    required this.vPad,
+    this.primary = false,
+  });
+
+  @override
+  State<_HeroActionButton> createState() => _HeroActionButtonState();
+}
+
+class _HeroActionButtonState extends State<_HeroActionButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color background;
+    final Color border;
+    final Color foreground;
+
+    if (widget.primary) {
+      background = _hovered ? HeroSection.accent : Colors.white;
+      border = Colors.transparent;
+      foreground = Colors.black;
+    } else {
+      background = Colors.white.withValues(alpha: _hovered ? 0.07 : 0.02);
+      border = Colors.white.withValues(alpha: _hovered ? 0.35 : 0.16);
+      foreground = Colors.white;
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          transform: Matrix4.translationValues(0, _hovered ? -2 : 0, 0),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.hPad,
+            vertical: widget.vPad,
+          ),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+            boxShadow: widget.primary && _hovered
+                ? [
+                    BoxShadow(
+                      color: HeroSection.accent.withValues(alpha: 0.25),
+                      blurRadius: 26,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.label,
+                style: GoogleFonts.poppins(
+                  fontSize: widget.fontSize,
+                  fontWeight: FontWeight.w600,
+                  color: foreground,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                widget.icon,
+                size: widget.fontSize + 4,
+                color: widget.primary || !_hovered
+                    ? foreground
+                    : HeroSection.accent,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PulseDot extends StatefulWidget {
+  final double size;
+
+  const _PulseDot({required this.size});
+
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot>
+    with SingleTickerProviderStateMixin {
+  static const Color _green = Color(0xFF4ADE80);
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double box = widget.size * 2.8;
+
+    return SizedBox(
+      width: box,
+      height: box,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              final double t = _controller.value;
+              return Container(
+                width: widget.size + widget.size * 1.8 * t,
+                height: widget.size + widget.size * 1.8 * t,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _green.withValues(alpha: (1 - t) * 0.55),
+                    width: 1.2,
+                  ),
+                ),
+              );
+            },
+          ),
+          Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: const BoxDecoration(
+              color: _green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SocialIconButton extends StatefulWidget {
+  final IconData icon;
+  final double size;
   final String tooltip;
   final VoidCallback onTap;
 
   const _SocialIconButton({
     required this.icon,
-    required this.iconSize,
+    required this.size,
     required this.tooltip,
     required this.onTap,
   });
 
   @override
+  State<_SocialIconButton> createState() => _SocialIconButtonState();
+}
+
+class _SocialIconButtonState extends State<_SocialIconButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icon, color: Colors.grey[400], size: iconSize),
-        hoverColor: Colors.white.withValues(alpha: 0.05),
-        splashRadius: iconSize,
+      message: widget.tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: HeroSection.accent.withValues(
+                alpha: _hovered ? 0.10 : 0.02,
+              ),
+              border: Border.all(
+                color: _hovered
+                    ? HeroSection.accent.withValues(alpha: 0.45)
+                    : Colors.white.withValues(alpha: 0.14),
+              ),
+            ),
+            child: Icon(
+              widget.icon,
+              size: widget.size * 0.42,
+              color: _hovered ? HeroSection.accent : Colors.grey[400],
+            ),
+          ),
+        ),
       ),
     );
   }

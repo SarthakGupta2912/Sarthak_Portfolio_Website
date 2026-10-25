@@ -24,3 +24,5 @@ flutter_launcher_icons:
     image_path: "assets/SarthakPic.jpeg"
 flutter:
   uses-material-design: true
+  assets:
+    - assets/hero_portrait.jpg
