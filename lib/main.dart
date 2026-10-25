@@ -1,11 +1,65 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await _preloadFonts();
+  } catch (error, stackTrace) {
+    debugPrint('Font preload failed: $error\n$stackTrace');
+  }
   runApp(const SarthakPortfolio());
+}
+
+/// Loads bundled fonts before the first frame so the first paint uses the
+/// intended typefaces instead of a fallback font.
+Future<void> _preloadFonts() async {
+  final FontLoader inter = FontLoader('Inter')
+    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
+  final FontLoader poppins = FontLoader('Poppins')
+    ..addFont(rootBundle.load('assets/fonts/Poppins-Regular.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Poppins-Medium.ttf'))
+    ..addFont(rootBundle.load('assets/fonts/Poppins-SemiBold.ttf'));
+
+  await Future.wait([inter.load(), poppins.load()]);
+}
+
+/// Poppins is bundled with the app so the web build never waits on a font CDN.
+TextStyle appPoppins({
+  double? fontSize,
+  Color? color,
+  FontWeight? fontWeight,
+  double? letterSpacing,
+  double? height,
+}) {
+  return TextStyle(
+    fontFamily: 'Poppins',
+    fontSize: fontSize,
+    color: color,
+    fontWeight: fontWeight,
+    letterSpacing: letterSpacing,
+    height: height,
+  );
+}
+
+double _measureTextWidth(String text, TextStyle style, TextScaler scaler) {
+  final TextPainter painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: 1,
+    textDirection: TextDirection.ltr,
+    textScaler: scaler,
+  )..layout();
+  final double width = painter.width;
+  painter.dispose();
+  return width;
 }
 
 class SarthakPortfolio extends StatelessWidget {
@@ -19,7 +73,8 @@ class SarthakPortfolio extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF050505),
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+        fontFamily: 'Inter',
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Inter'),
       ),
       home: const PortfolioHome(),
     );
@@ -36,85 +91,44 @@ class SarthakPortfolio extends StatelessWidget {
 class LensAnimationState extends ChangeNotifier {
   Offset _smoothedPos = const Offset(-1000, -1000);
   Offset _targetPos = const Offset(-1000, -1000);
-  bool isActive = true;
 
-  final List<_Dot> _dots = [];
-  bool _initialized = false;
+  /// Off by default: most visitors only need the static dot grid.
+  bool isActive = false;
+
+  /// Called when the pointer moves so the background can wake its ticker.
+  VoidCallback? onWake;
 
   Offset get smoothedPos => _smoothedPos;
 
   void setTarget(Offset pos) {
+    if (!isActive) return;
     _targetPos = pos;
+    onWake?.call();
   }
 
   void toggleActive() {
     isActive = !isActive;
     notifyListeners();
+    if (isActive) onWake?.call();
   }
 
-  void resetGrid() {
-    _initialized = false;
-    _dots.clear();
-  }
+  /// Eases the glow toward the pointer. Returns true while it is still moving.
+  bool advance(double dt) {
+    if (!isActive) return false;
 
-  void initGrid(Size size, double spacing) {
-    if (_initialized) return;
-    _initialized = true;
-    for (double x = 0; x < size.width + spacing; x += spacing) {
-      for (double y = 0; y < size.height + spacing; y += spacing) {
-        _dots.add(_Dot(baseX: x, baseY: y, x: x, y: y));
-      }
-    }
-  }
-
-  bool tick() {
-    final dx = _targetPos.dx - _smoothedPos.dx;
-    final dy = _targetPos.dy - _smoothedPos.dy;
-
-    const double kMovementThreshold = 0.3;
-    final bool moving =
-        dx.abs() > kMovementThreshold || dy.abs() > kMovementThreshold;
-
+    final double factor = 1 - math.exp(-5.0 * dt);
     _smoothedPos = Offset(
-      _smoothedPos.dx + dx * 0.08,
-      _smoothedPos.dy + dy * 0.08,
+      _smoothedPos.dx + (_targetPos.dx - _smoothedPos.dx) * factor,
+      _smoothedPos.dy + (_targetPos.dy - _smoothedPos.dy) * factor,
     );
 
-    if (!isActive && !moving) return false;
+    final double dx = _targetPos.dx - _smoothedPos.dx;
+    final double dy = _targetPos.dy - _smoothedPos.dy;
+    final bool moving = dx * dx + dy * dy > 0.25;
 
-    _updateDots();
+    if (!moving) _smoothedPos = _targetPos;
     notifyListeners();
-    return true;
-  }
-
-  void _updateDots() {
-    const double radius = 220;
-    const double radiusSq = radius * radius;
-
-    for (final dot in _dots) {
-      final double dx = _smoothedPos.dx - dot.baseX;
-      final double dy = _smoothedPos.dy - dot.baseY;
-      final double distSq = dx * dx + dy * dy;
-
-      double targetX = dot.baseX;
-      double targetY = dot.baseY;
-      double targetIntensity;
-
-      if (isActive && distSq < radiusSq && distSq > 0) {
-        final double dist = math.sqrt(distSq);
-        final double t = (radius - dist) / radius;
-        final double force = t * t * t;
-        targetX -= (dx / dist) * force * 55;
-        targetY -= (dy / dist) * force * 55;
-        targetIntensity = 0.12 + force * 0.88;
-      } else {
-        targetIntensity = isActive ? 0.07 : 0.03;
-      }
-
-      dot.x += (targetX - dot.x) * 0.12;
-      dot.y += (targetY - dot.y) * 0.12;
-      dot.intensity += (targetIntensity - dot.intensity) * 0.18;
-    }
+    return moving;
   }
 }
 
@@ -135,13 +149,12 @@ class _PortfolioHomeState extends State<PortfolioHome> {
 
   final LensAnimationState _lensState = LensAnimationState();
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<String> _activeTab = ValueNotifier<String>('home');
 
   final GlobalKey _heroKey = GlobalKey();
   final GlobalKey _skillsKey = GlobalKey();
   final GlobalKey _experienceKey = GlobalKey();
   final GlobalKey _projectsKey = GlobalKey();
-
-  String _activeTab = 'home';
 
   @override
   void initState() {
@@ -155,42 +168,47 @@ class _PortfolioHomeState extends State<PortfolioHome> {
     _lensState.dispose();
     _scrollController.dispose();
     _mouseNotifier.dispose();
+    _activeTab.dispose();
     super.dispose();
   }
 
   void _onScroll() {
     if (!mounted || !_scrollController.hasClients) return;
-    final double screenHeight = MediaQuery.of(context).size.height;
-    final double triggerLine = screenHeight * 0.4;
 
-    final heroY = _getY(_heroKey);
-    final skillsY = _getY(_skillsKey);
-    final expY = _getY(_experienceKey);
-    final projY = _getY(_projectsKey);
+    final double scrollOffset = _scrollController.offset;
+    final double triggerLine =
+        _scrollController.position.viewportDimension * 0.4;
 
-    String newTab = _activeTab;
-
-    if (projY != null && projY < triggerLine) {
+    String newTab = 'home';
+    if (_hasReached(_projectsKey, scrollOffset, triggerLine)) {
       newTab = 'projects';
-    } else if (expY != null && expY < triggerLine) {
+    } else if (_hasReached(_experienceKey, scrollOffset, triggerLine)) {
       newTab = 'experience';
-    } else if (skillsY != null && skillsY < triggerLine) {
+    } else if (_hasReached(_skillsKey, scrollOffset, triggerLine)) {
       newTab = 'skills';
-    } else if (heroY != null && heroY < triggerLine) {
-      newTab = 'home';
     }
 
-    if (newTab != _activeTab) {
-      setState(() => _activeTab = newTab);
+    if (newTab != _activeTab.value) {
+      _activeTab.value = newTab;
     }
   }
 
-  double? _getY(GlobalKey key) {
-    final ctx = key.currentContext;
+  /// Content offset of a section, independent of the current paint offset.
+  ///
+  /// Using [RenderAbstractViewport] avoids reading stale `localToGlobal`
+  /// positions during a fast scroll, which used to leave the nav one section
+  /// behind.
+  double? _getSectionOffset(GlobalKey key) {
+    final BuildContext? ctx = key.currentContext;
     if (ctx == null) return null;
-    final RenderBox? box = ctx.findRenderObject() as RenderBox?;
-    if (box == null) return null;
-    return box.localToGlobal(Offset.zero).dy;
+    final RenderObject? box = ctx.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return null;
+    return RenderAbstractViewport.of(box).getOffsetToReveal(box, 0.0).offset;
+  }
+
+  bool _hasReached(GlobalKey key, double scrollOffset, double triggerLine) {
+    final double? sectionOffset = _getSectionOffset(key);
+    return sectionOffset != null && scrollOffset >= sectionOffset - triggerLine;
   }
 
   void _scrollTo(GlobalKey key, String tab) {
@@ -201,7 +219,7 @@ class _PortfolioHomeState extends State<PortfolioHome> {
         duration: const Duration(milliseconds: 750),
         curve: Curves.easeInOutCubic,
       );
-      setState(() => _activeTab = tab);
+      _activeTab.value = tab;
     }
   }
 
@@ -223,10 +241,12 @@ class _PortfolioHomeState extends State<PortfolioHome> {
     return Scaffold(
       body: Listener(
         onPointerHover: (event) {
+          if (event.kind != PointerDeviceKind.mouse) return;
           _mouseNotifier.value = event.position;
           _lensState.setTarget(event.position);
         },
         onPointerMove: (event) {
+          if (event.kind != PointerDeviceKind.mouse) return;
           _mouseNotifier.value = event.position;
           _lensState.setTarget(event.position);
         },
@@ -258,19 +278,33 @@ class _PortfolioHomeState extends State<PortfolioHome> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        HeroSection(
-                          key: _heroKey,
-                          lensState: _lensState,
-                          media: media,
+                        RepaintBoundary(
+                          child: HeroSection(
+                            key: _heroKey,
+                            lensState: _lensState,
+                            media: media,
+                          ),
                         ),
                         SizedBox(height: sectionGap),
-                        SkillsSection(key: _skillsKey, media: media),
+                        RepaintBoundary(
+                          child: SkillsSection(key: _skillsKey, media: media),
+                        ),
                         SizedBox(height: sectionGap),
-                        ExperienceSection(key: _experienceKey, media: media),
+                        RepaintBoundary(
+                          child: ExperienceSection(
+                            key: _experienceKey,
+                            media: media,
+                          ),
+                        ),
                         SizedBox(height: sectionGap),
-                        ProjectsSection(key: _projectsKey, media: media),
+                        RepaintBoundary(
+                          child: ProjectsSection(
+                            key: _projectsKey,
+                            media: media,
+                          ),
+                        ),
                         SizedBox(height: sectionGap * 0.75),
-                        const Footer(),
+                        const RepaintBoundary(child: Footer()),
                       ],
                     ),
                   ),
@@ -284,40 +318,46 @@ class _PortfolioHomeState extends State<PortfolioHome> {
                   top: 0,
                   bottom: 0,
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _NavButton(
-                          label: '01. Intro',
-                          isActive: _activeTab == 'home',
-                          onTap: () => _scrollTo(_heroKey, 'home'),
-                        ),
-                        SizedBox(
-                          height: (media.height * 0.025).clamp(12.0, 32.0),
-                        ),
-                        _NavButton(
-                          label: '02. Skills',
-                          isActive: _activeTab == 'skills',
-                          onTap: () => _scrollTo(_skillsKey, 'skills'),
-                        ),
-                        SizedBox(
-                          height: (media.height * 0.025).clamp(12.0, 32.0),
-                        ),
-                        _NavButton(
-                          label: '03. Experience',
-                          isActive: _activeTab == 'experience',
-                          onTap: () => _scrollTo(_experienceKey, 'experience'),
-                        ),
-                        SizedBox(
-                          height: (media.height * 0.025).clamp(12.0, 32.0),
-                        ),
-                        _NavButton(
-                          label: '04. Projects',
-                          isActive: _activeTab == 'projects',
-                          onTap: () => _scrollTo(_projectsKey, 'projects'),
-                        ),
-                      ],
+                    child: ValueListenableBuilder<String>(
+                      valueListenable: _activeTab,
+                      builder: (context, activeTab, _) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            _NavButton(
+                              label: '01. Intro',
+                              isActive: activeTab == 'home',
+                              onTap: () => _scrollTo(_heroKey, 'home'),
+                            ),
+                            SizedBox(
+                              height: (media.height * 0.025).clamp(12.0, 32.0),
+                            ),
+                            _NavButton(
+                              label: '02. Skills',
+                              isActive: activeTab == 'skills',
+                              onTap: () => _scrollTo(_skillsKey, 'skills'),
+                            ),
+                            SizedBox(
+                              height: (media.height * 0.025).clamp(12.0, 32.0),
+                            ),
+                            _NavButton(
+                              label: '03. Experience',
+                              isActive: activeTab == 'experience',
+                              onTap: () =>
+                                  _scrollTo(_experienceKey, 'experience'),
+                            ),
+                            SizedBox(
+                              height: (media.height * 0.025).clamp(12.0, 32.0),
+                            ),
+                            _NavButton(
+                              label: '04. Projects',
+                              isActive: activeTab == 'projects',
+                              onTap: () => _scrollTo(_projectsKey, 'projects'),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -329,34 +369,36 @@ class _PortfolioHomeState extends State<PortfolioHome> {
                 child: ValueListenableBuilder<Offset>(
                   valueListenable: _mouseNotifier,
                   builder: (context, mousePos, child) {
-                    return Transform.translate(
-                      offset: Offset(
-                        mousePos.dx - cursorSize / 2,
-                        mousePos.dy - cursorSize / 2,
-                      ),
-                      child: IgnorePointer(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(
-                              width: cursorSize,
-                              height: cursorSize,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
+                    return RepaintBoundary(
+                      child: Transform.translate(
+                        offset: Offset(
+                          mousePos.dx - cursorSize / 2,
+                          mousePos.dy - cursorSize / 2,
+                        ),
+                        child: IgnorePointer(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: cursorSize,
+                                height: cursorSize,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Container(
-                              width: cursorDotSize,
-                              height: cursorDotSize,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
+                              Container(
+                                width: cursorDotSize,
+                                height: cursorDotSize,
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -384,48 +426,107 @@ class KineticLensBackground extends StatefulWidget {
 
 class _KineticLensBackgroundState extends State<KineticLensBackground>
     with SingleTickerProviderStateMixin {
-  late Ticker _ticker;
-  Size _lastSize = Size.zero; // ← track previous layout size
+  late final Ticker _ticker;
+  late final ValueNotifier<bool> _active;
+  late final VoidCallback _lensListener;
+  Duration _lastElapsed = Duration.zero;
+  Size _lastSize = Size.zero;
+  double _spacing = 0;
+  List<Offset> _anchors = const [];
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) => widget.lensState.tick());
-    _ticker.start();
+    _ticker = createTicker(_onTick);
+    _active = ValueNotifier<bool>(widget.lensState.isActive);
+    widget.lensState.onWake = _wake;
+    _lensListener = () {
+      if (_active.value != widget.lensState.isActive) {
+        _active.value = widget.lensState.isActive;
+      }
+    };
+    widget.lensState.addListener(_lensListener);
   }
 
   @override
   void dispose() {
+    widget.lensState.removeListener(_lensListener);
+    if (widget.lensState.onWake == _wake) widget.lensState.onWake = null;
+    _active.dispose();
     _ticker.dispose();
     super.dispose();
+  }
+
+  void _wake() {
+    if (_ticker.isActive) return;
+    _lastElapsed = Duration.zero;
+    _ticker.start();
+  }
+
+  void _onTick(Duration elapsed) {
+    // The lens is decoration, not a game loop. 30 fps is plenty.
+    if (_lastElapsed != Duration.zero &&
+        elapsed - _lastElapsed < const Duration(milliseconds: 33)) {
+      return;
+    }
+
+    final double dt = _lastElapsed == Duration.zero
+        ? 1 / 30
+        : (elapsed - _lastElapsed).inMicroseconds / 1000000;
+    _lastElapsed = elapsed;
+
+    if (!widget.lensState.advance(dt.clamp(0.001, 0.1))) {
+      _ticker.stop();
+      _lastElapsed = Duration.zero;
+    }
+  }
+
+  List<Offset> _buildAnchors(Size size, double spacing) {
+    if (size.isEmpty) return const [];
+    final List<Offset> anchors = <Offset>[];
+    for (double x = 0; x < size.width + spacing; x += spacing) {
+      for (double y = 0; y < size.height + spacing; y += spacing) {
+        anchors.add(Offset(x, y));
+      }
+    }
+    return anchors;
   }
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
-    final double spacing = (media.shortestSide * 0.04).clamp(28.0, 70.0);
+    final double spacing = (media.shortestSide * 0.05).clamp(38.0, 72.0);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final Size currentSize = Size(
-          constraints.maxWidth,
-          constraints.maxHeight,
-        );
-
-        // Reset grid whenever the available size changes (zoom, resize, etc.)
-        if (currentSize != _lastSize) {
-          _lastSize = currentSize;
-          // Schedule after layout to avoid mutating state mid-build
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            widget.lensState.resetGrid();
-            widget.lensState.initGrid(currentSize, spacing);
-          });
+        final Size size = Size(constraints.maxWidth, constraints.maxHeight);
+        if (size != _lastSize || spacing != _spacing) {
+          _lastSize = size;
+          _spacing = spacing;
+          _anchors = _buildAnchors(size, spacing);
         }
 
-        return SizedBox(
-          width: currentSize.width,
-          height: currentSize.height,
-          child: CustomPaint(painter: LensPainter(repaint: widget.lensState)),
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            RepaintBoundary(
+              child: CustomPaint(painter: _DotGridPainter(anchors: _anchors)),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: _active,
+              builder: (context, active, _) {
+                if (!active) return const SizedBox.shrink();
+                return RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _LensOverlayPainter(
+                      repaint: widget.lensState,
+                      anchors: _anchors,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         );
       },
     );
@@ -433,55 +534,83 @@ class _KineticLensBackgroundState extends State<KineticLensBackground>
 }
 
 // ---------------------------------------------------------------------------
-// Data
+// Painters
 // ---------------------------------------------------------------------------
-class _Dot {
-  final double baseX;
-  final double baseY;
-  double x;
-  double y;
-  double intensity = 0.03;
+class _DotGridPainter extends CustomPainter {
+  final List<Offset> anchors;
 
-  _Dot({
-    required this.baseX,
-    required this.baseY,
-    required this.x,
-    required this.y,
-  });
-}
+  const _DotGridPainter({required this.anchors});
 
-// ---------------------------------------------------------------------------
-// Painter
-// ---------------------------------------------------------------------------
-class LensPainter extends CustomPainter {
-  final LensAnimationState repaint;
-
-  LensPainter({required this.repaint}) : super(repaint: repaint);
-
-  static final Paint _paint = Paint()..style = PaintingStyle.fill;
-  static const double _dotRadius = 1.5;
-  static const double _radiusThreshold = 220;
-  static const double _radiusThresholdSq = _radiusThreshold * _radiusThreshold;
+  static final Paint _paint = Paint()
+    ..color = const Color(0x14FFFFFF)
+    ..strokeWidth = 2.4
+    ..strokeCap = StrokeCap.round;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (anchors.isEmpty) return;
+    // One draw call for the whole grid keeps this cheap on old GPUs.
+    canvas.drawPoints(ui.PointMode.points, anchors, _paint);
+  }
+
+  @override
+  bool shouldRepaint(_DotGridPainter oldDelegate) =>
+      oldDelegate.anchors != anchors;
+}
+
+class _LensOverlayPainter extends CustomPainter {
+  final LensAnimationState repaint;
+  final List<Offset> anchors;
+
+  _LensOverlayPainter({required this.repaint, required this.anchors})
+    : super(repaint: repaint);
+
+  static const double _radius = 230;
+  static final Paint _glowPaint = Paint();
+  static final Paint _dotPaint = Paint()
+    ..color = const Color(0x9900E5FF)
+    ..strokeWidth = 3.2
+    ..strokeCap = StrokeCap.round;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (!repaint.isActive) return;
     final Offset mouse = repaint.smoothedPos;
-    final bool active = repaint.isActive;
+    if (mouse.dx < 0 || mouse.dy < 0) return;
 
-    for (final dot in repaint._dots) {
-      final double dx = mouse.dx - dot.baseX;
-      final double dy = mouse.dy - dot.baseY;
-      final bool inRadius = active && (dx * dx + dy * dy) < _radiusThresholdSq;
+    final Rect glow = Rect.fromCircle(center: mouse, radius: _radius);
+    _glowPaint.shader = const RadialGradient(
+      colors: [Color(0x1F00E5FF), Color(0x0000E5FF)],
+    ).createShader(glow);
+    canvas.drawCircle(mouse, _radius, _glowPaint);
 
-      _paint.color = (inRadius ? const Color(0xFF00E5FF) : Colors.white)
-          .withValues(alpha: dot.intensity.clamp(0.0, 1.0));
+    final List<Offset> points = <Offset>[];
+    for (final Offset anchor in anchors) {
+      final double dx = anchor.dx - mouse.dx;
+      final double dy = anchor.dy - mouse.dy;
+      final double distSq = dx * dx + dy * dy;
+      if (distSq >= _radius * _radius) continue;
 
-      canvas.drawCircle(Offset(dot.x, dot.y), _dotRadius, _paint);
+      final double dist = math.sqrt(distSq);
+      final double t = 1 - dist / _radius;
+      final double push = t * t * 12;
+      if (dist == 0) {
+        points.add(anchor);
+      } else {
+        points.add(
+          Offset(anchor.dx - dx / dist * push, anchor.dy - dy / dist * push),
+        );
+      }
+    }
+
+    if (points.isNotEmpty) {
+      canvas.drawPoints(ui.PointMode.points, points, _dotPaint);
     }
   }
 
   @override
-  bool shouldRepaint(LensPainter old) => !identical(old.repaint, repaint);
+  bool shouldRepaint(_LensOverlayPainter oldDelegate) =>
+      oldDelegate.anchors != anchors || oldDelegate.repaint != repaint;
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +659,7 @@ class _NavButtonState extends State<_NavButton> {
                 opacity: show ? 1.0 : 0.0,
                 child: Text(
                   widget.label,
-                  style: GoogleFonts.poppins(
+                  style: appPoppins(
                     fontSize: fontSize,
                     color: widget.isActive
                         ? const Color(0xFF00E5FF)
@@ -579,6 +708,36 @@ class HeroSection extends StatelessWidget {
         ? (media.width * 0.020).clamp(15.0, 26.0)
         : (media.width * 0.026).clamp(14.0, 28.0);
     final double pillFontSize = (media.shortestSide * 0.0135).clamp(9.0, 13.0);
+    final double pillHeight = (media.shortestSide * 0.055).clamp(40.0, 50.0);
+    final double pillHPad = (media.width * 0.013).clamp(12.0, 18.0);
+    final String availabilityLabel = media.width < 480
+        ? 'Open to work'
+        : 'Available for opportunities';
+    final TextScaler textScaler = MediaQuery.textScalerOf(context);
+    // Match the effective style, including inherited letter spacing.
+    final TextStyle pillTextStyle = DefaultTextStyle.of(
+      context,
+    ).style.merge(appPoppins(fontSize: pillFontSize));
+    final double availabilityTextWidth = _measureTextWidth(
+      availabilityLabel,
+      pillTextStyle,
+      textScaler,
+    );
+    final double lensTextWidth = _measureTextWidth(
+      'Lens illusion',
+      pillTextStyle,
+      textScaler,
+    );
+    // Both pills share the widest natural size so the pair reads as a set.
+    // Web fonts can arrive after the first layout, so leave headroom for the
+    // final Poppins metrics instead of clipping the fallback measurement.
+    const double textHeadroom = 1.25;
+    final double pillWidth = math
+        .max(
+          availabilityTextWidth * textHeadroom + 7 * 2.3 + 8 + pillHPad * 2,
+          lensTextWidth * textHeadroom + (pillFontSize + 4) + 7 + pillHPad * 2,
+        )
+        .ceilToDouble();
     final double gapBadge = (media.height * 0.026).clamp(16.0, 32.0);
     final double gapEyebrow = (media.height * 0.016).clamp(10.0, 20.0);
     final double gapName = (media.height * 0.020).clamp(12.0, 24.0);
@@ -590,7 +749,6 @@ class HeroSection extends StatelessWidget {
     final double socialSize = (media.shortestSide * 0.050).clamp(38.0, 46.0);
     final double eyebrowSize = (media.shortestSide * 0.0125).clamp(8.5, 11.5);
     final double stackSize = (media.shortestSide * 0.0115).clamp(8.0, 11.5);
-    final bool compactHero = media.width < 480;
 
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,19 +758,21 @@ class HeroSection extends StatelessWidget {
           runSpacing: 10,
           children: [
             _HeroPill(
+              key: const Key('hero-availability-pill'),
+              width: pillWidth,
+              height: pillHeight,
+              hPad: pillHPad,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const _PulseDot(size: 7),
+                  const _StatusDot(size: 7),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
-                      compactHero
-                          ? 'Open to work'
-                          : 'Available for opportunities',
+                      availabilityLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
+                      style: appPoppins(
                         fontSize: pillFontSize,
                         color: Colors.grey[300],
                       ),
@@ -624,6 +784,10 @@ class HeroSection extends StatelessWidget {
             ListenableBuilder(
               listenable: lensState,
               builder: (_, _) => _HeroPill(
+                key: const Key('hero-lens-pill'),
+                width: pillWidth,
+                height: pillHeight,
+                hPad: pillHPad,
                 onTap: lensState.toggleActive,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -636,11 +800,15 @@ class HeroSection extends StatelessWidget {
                       color: Colors.grey[500],
                     ),
                     const SizedBox(width: 7),
-                    Text(
-                      'Lens illusion',
-                      style: GoogleFonts.poppins(
-                        fontSize: pillFontSize,
-                        color: Colors.grey[400],
+                    Flexible(
+                      child: Text(
+                        'Lens illusion',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: appPoppins(
+                          fontSize: pillFontSize,
+                          color: Colors.grey[400],
+                        ),
                       ),
                     ),
                   ],
@@ -664,7 +832,7 @@ class HeroSection extends StatelessWidget {
             const SizedBox(width: 11),
             Text(
               'SOFTWARE ENGINEER',
-              style: GoogleFonts.poppins(
+              style: appPoppins(
                 fontSize: eyebrowSize,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 2.6,
@@ -792,7 +960,7 @@ class HeroSection extends StatelessWidget {
             Flexible(
               child: Text(
                 'FLUTTER   ·   DART   ·   LITERT   ·   SQLITE   ·   UNITY',
-                style: GoogleFonts.poppins(
+                style: appPoppins(
                   fontSize: stackSize,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 1.3,
@@ -851,19 +1019,6 @@ class _HeroPortrait extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
             border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-            boxShadow: [
-              BoxShadow(
-                color: HeroSection.accent.withValues(alpha: 0.10),
-                blurRadius: 70,
-                spreadRadius: -18,
-                offset: const Offset(0, 24),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 40,
-                offset: const Offset(0, 20),
-              ),
-            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(25),
@@ -875,6 +1030,7 @@ class _HeroPortrait extends StatelessWidget {
                   fit: BoxFit.cover,
                   alignment: Alignment.topCenter,
                   filterQuality: FilterQuality.medium,
+                  cacheWidth: (width * 2).round(),
                 ),
                 const DecoratedBox(
                   decoration: BoxDecoration(
@@ -892,12 +1048,12 @@ class _HeroPortrait extends StatelessWidget {
                   bottom: 16,
                   child: Row(
                     children: [
-                      const _PulseDot(size: 6),
+                      const _StatusDot(size: 6),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'BASED IN INDIA',
-                          style: GoogleFonts.poppins(
+                          style: appPoppins(
                             fontSize: captionSize * 0.82,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 1.8,
@@ -920,8 +1076,18 @@ class _HeroPortrait extends StatelessWidget {
 class _HeroPill extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
+  final double width;
+  final double height;
+  final double hPad;
 
-  const _HeroPill({required this.child, this.onTap});
+  const _HeroPill({
+    super.key,
+    required this.child,
+    required this.width,
+    required this.height,
+    required this.hPad,
+    this.onTap,
+  });
 
   @override
   State<_HeroPill> createState() => _HeroPillState();
@@ -943,7 +1109,10 @@ class _HeroPillState extends State<_HeroPill> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          width: widget.width,
+          height: widget.height,
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(horizontal: widget.hPad),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: _hovered ? 0.07 : 0.035),
             borderRadius: BorderRadius.circular(100),
@@ -1033,7 +1202,7 @@ class _HeroActionButtonState extends State<_HeroActionButton> {
             children: [
               Text(
                 widget.label,
-                style: GoogleFonts.poppins(
+                style: appPoppins(
                   fontSize: widget.fontSize,
                   fontWeight: FontWeight.w600,
                   color: foreground,
@@ -1055,66 +1224,35 @@ class _HeroActionButtonState extends State<_HeroActionButton> {
   }
 }
 
-class _PulseDot extends StatefulWidget {
+class _StatusDot extends StatelessWidget {
   final double size;
 
-  const _PulseDot({required this.size});
+  const _StatusDot({required this.size});
 
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
   static const Color _green = Color(0xFF4ADE80);
-
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1800),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final double box = widget.size * 2.8;
+    final double box = size * 2.3;
 
     return SizedBox(
       width: box,
       height: box,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              final double t = _controller.value;
-              return Container(
-                width: widget.size + widget.size * 1.8 * t,
-                height: widget.size + widget.size * 1.8 * t,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _green.withValues(alpha: (1 - t) * 0.55),
-                    width: 1.2,
-                  ),
-                ),
-              );
-            },
-          ),
-          Container(
-            width: widget.size,
-            height: widget.size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: _green.withValues(alpha: 0.18), width: 1.2),
+        ),
+        child: Center(
+          child: Container(
+            width: size,
+            height: size,
             decoration: const BoxDecoration(
               color: _green,
               shape: BoxShape.circle,
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1449,7 +1587,7 @@ class _TiltCardState extends State<TiltCard> {
                       Expanded(
                         child: Text(
                           s,
-                          style: GoogleFonts.poppins(
+                          style: appPoppins(
                             fontSize: skillSize,
                             color: Colors.grey[400],
                           ),
@@ -1619,7 +1757,7 @@ class ExperienceItem extends StatelessWidget {
                         SizedBox(height: titlePeriodGap),
                         Text(
                           period,
-                          style: GoogleFonts.poppins(
+                          style: appPoppins(
                             fontSize: periodSize,
                             color: Colors.grey[600],
                           ),
@@ -1650,7 +1788,7 @@ class ExperienceItem extends StatelessWidget {
                         SizedBox(width: (media.width * 0.012).clamp(8.0, 20.0)),
                         Text(
                           period,
-                          style: GoogleFonts.poppins(
+                          style: appPoppins(
                             fontSize: periodSize,
                             color: Colors.grey[600],
                           ),
@@ -1798,12 +1936,20 @@ class ProjectsSection extends StatelessWidget {
                     children: [
                       SizedBox(
                         width: cardWidth,
-                        child: _ProjectCard(project: projects[0], media: media),
+                        child: _ProjectCard(
+                          project: projects[0],
+                          media: media,
+                          fillHeight: true,
+                        ),
                       ),
                       SizedBox(width: cardSpacing),
                       SizedBox(
                         width: cardWidth,
-                        child: _ProjectCard(project: projects[1], media: media),
+                        child: _ProjectCard(
+                          project: projects[1],
+                          media: media,
+                          fillHeight: true,
+                        ),
                       ),
                     ],
                   ),
@@ -1815,12 +1961,19 @@ class ProjectsSection extends StatelessWidget {
                     children: [
                       SizedBox(
                         width: cardWidth,
-                        child: _ProjectCard(project: projects[2], media: media),
+                        child: _ProjectCard(
+                          project: projects[2],
+                          media: media,
+                          fillHeight: true,
+                        ),
                       ),
                       SizedBox(width: cardSpacing),
                       SizedBox(
                         width: cardWidth,
-                        child: _MoreOnGitHubCard(media: media),
+                        child: _MoreOnGitHubCard(
+                          media: media,
+                          fillHeight: true,
+                        ),
                       ),
                     ],
                   ),
@@ -1863,8 +2016,13 @@ class _ProjectData {
 class _ProjectCard extends StatefulWidget {
   final _ProjectData project;
   final Size media;
+  final bool fillHeight;
 
-  const _ProjectCard({required this.project, required this.media});
+  const _ProjectCard({
+    required this.project,
+    required this.media,
+    this.fillHeight = false,
+  });
 
   @override
   State<_ProjectCard> createState() => _ProjectCardState();
@@ -1904,6 +2062,7 @@ class _ProjectCardState extends State<_ProjectCard> {
             mode: LaunchMode.externalApplication,
           ),
           child: AnimatedContainer(
+            key: Key('project-card-${project.title}'),
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
             padding: EdgeInsets.all(pad),
@@ -1919,10 +2078,11 @@ class _ProjectCardState extends State<_ProjectCard> {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: widget.fillHeight
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
@@ -1930,12 +2090,18 @@ class _ProjectCardState extends State<_ProjectCard> {
                       color: project.accentColor,
                       size: iconSize,
                     ),
-                    _StatusPill(
-                      label: project.status,
-                      accentColor: project.accentColor,
-                      fontSize: statusSize,
-                      hPad: tagSpacing,
-                      vPad: tagSpacing * 0.4,
+                    SizedBox(width: tagSpacing),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: _StatusPill(
+                          label: project.status,
+                          accentColor: project.accentColor,
+                          fontSize: statusSize,
+                          hPad: tagSpacing,
+                          vPad: tagSpacing * 0.4,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1952,7 +2118,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                 SizedBox(height: innerGap2),
                 Text(
                   project.tagline,
-                  style: GoogleFonts.poppins(
+                  style: appPoppins(
                     fontSize: taglineSize,
                     color: project.accentColor.withValues(alpha: 0.9),
                     fontWeight: FontWeight.w500,
@@ -1996,7 +2162,10 @@ class _ProjectCardState extends State<_ProjectCard> {
                     ),
                   ),
                 ),
-                SizedBox(height: innerGap2),
+                if (widget.fillHeight)
+                  const Spacer()
+                else
+                  SizedBox(height: innerGap2),
                 Wrap(
                   spacing: tagSpacing,
                   runSpacing: tagSpacing * 0.6,
@@ -2016,7 +2185,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                           ),
                           child: Text(
                             t,
-                            style: GoogleFonts.poppins(
+                            style: appPoppins(
                               fontSize: tagSize,
                               color: Colors.grey[500],
                             ),
@@ -2028,12 +2197,17 @@ class _ProjectCardState extends State<_ProjectCard> {
                 SizedBox(height: innerGap1),
                 Row(
                   children: [
-                    Text(
-                      project.ctaLabel,
-                      style: GoogleFonts.poppins(
-                        fontSize: taglineSize,
-                        color: _hovered ? Colors.white : Colors.grey[500],
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        project.ctaLabel,
+                        key: Key('project-cta-${project.title}'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: appPoppins(
+                          fontSize: taglineSize,
+                          color: _hovered ? Colors.white : Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     SizedBox(width: tagSpacing),
@@ -2079,7 +2253,10 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label.toUpperCase(),
-        style: GoogleFonts.poppins(
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: appPoppins(
           fontSize: fontSize,
           color: accentColor,
           letterSpacing: 0.8,
@@ -2092,7 +2269,9 @@ class _StatusPill extends StatelessWidget {
 
 class _MoreOnGitHubCard extends StatefulWidget {
   final Size media;
-  const _MoreOnGitHubCard({required this.media});
+  final bool fillHeight;
+
+  const _MoreOnGitHubCard({required this.media, this.fillHeight = false});
 
   @override
   State<_MoreOnGitHubCard> createState() => _MoreOnGitHubCardState();
@@ -2123,6 +2302,7 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
             mode: LaunchMode.externalApplication,
           ),
           child: AnimatedContainer(
+            key: const Key('project-card-github'),
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
             padding: EdgeInsets.all(pad),
@@ -2140,52 +2320,65 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: widget.fillHeight
+                  ? MainAxisAlignment.spaceBetween
+                  : MainAxisAlignment.center,
+              mainAxisSize: widget.fillHeight
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.code_rounded,
-                  color: _hovered ? Colors.white : Colors.grey[500],
-                  size: iconSize,
-                ),
-                SizedBox(height: gap1),
-                Text(
-                  'More on GitHub',
-                  style: TextStyle(
-                    fontSize: titleSize,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                SizedBox(height: gap2),
-                Text(
-                  'Game prototypes, AI experiments, and the rest of my builds live on my GitHub profile.',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: bodySize,
-                    height: 1.6,
-                  ),
-                ),
-                SizedBox(height: gap1),
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
-                      child: Text(
-                        'github.com/SarthakGupta2912',
-                        style: GoogleFonts.poppins(
-                          fontSize: linkSize,
-                          color: _hovered ? Colors.white : Colors.grey[500],
-                          fontWeight: FontWeight.w500,
-                        ),
+                    Icon(
+                      Icons.code_rounded,
+                      color: _hovered ? Colors.white : Colors.grey[500],
+                      size: iconSize,
+                    ),
+                    SizedBox(height: gap1),
+                    Text(
+                      'More on GitHub',
+                      style: TextStyle(
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                    SizedBox(width: gap2),
-                    Icon(
-                      Icons.arrow_outward_rounded,
-                      color: _hovered ? Colors.white : Colors.grey[600],
-                      size: (media.shortestSide * 0.022).clamp(14.0, 22.0),
+                    SizedBox(height: gap2),
+                    Text(
+                      'Game prototypes, AI experiments, and the rest of my builds live on my GitHub profile.',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: bodySize,
+                        height: 1.6,
+                      ),
                     ),
                   ],
+                ),
+                Padding(
+                  padding: EdgeInsets.only(top: gap1),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'github.com/SarthakGupta2912',
+                          maxLines: 2,
+                          style: appPoppins(
+                            fontSize: linkSize,
+                            color: _hovered ? Colors.white : Colors.grey[500],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: gap2),
+                      Icon(
+                        Icons.arrow_outward_rounded,
+                        color: _hovered ? Colors.white : Colors.grey[600],
+                        size: (media.shortestSide * 0.022).clamp(14.0, 22.0),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -2216,18 +2409,12 @@ class Footer extends StatelessWidget {
         SizedBox(height: gap1),
         Text(
           'Designed and Engineered by Sarthak Gupta',
-          style: GoogleFonts.poppins(
-            fontSize: fontSize,
-            color: Colors.grey[700],
-          ),
+          style: appPoppins(fontSize: fontSize, color: Colors.grey[700]),
         ),
         SizedBox(height: gap2),
         Text(
           'MCA • Panjab University',
-          style: GoogleFonts.poppins(
-            fontSize: fontSize,
-            color: Colors.grey[700],
-          ),
+          style: appPoppins(fontSize: fontSize, color: Colors.grey[700]),
         ),
         SizedBox(height: gap1),
         Wrap(
@@ -2288,7 +2475,7 @@ class _FooterLinkState extends State<_FooterLink> {
         ),
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 200),
-          style: GoogleFonts.poppins(
+          style: appPoppins(
             fontSize: widget.fontSize,
             color: _hovered ? Colors.white : Colors.grey[600],
           ),

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,40 @@ void _useSize(WidgetTester tester, Size size) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+void _useTextScale(WidgetTester tester, double scale) {
+  tester.platformDispatcher.textScaleFactorTestValue = scale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+}
+
+void _expectCardsContained(WidgetTester tester) {
+  for (final String title in const ['Fridge Roulette', 'LIMS', 'PathKosh']) {
+    final Finder card = find.byKey(Key('project-card-$title'));
+    final Finder cta = find.byKey(Key('project-cta-$title'));
+
+    expect(card, findsOneWidget, reason: '$title card should exist');
+    expect(cta, findsOneWidget, reason: '$title CTA should exist');
+
+    final Rect cardRect = tester.getRect(card);
+    final Rect ctaRect = tester.getRect(cta);
+
+    expect(
+      ctaRect.bottom,
+      lessThanOrEqualTo(cardRect.bottom),
+      reason: '$title CTA must stay inside the card vertically',
+    );
+    expect(
+      ctaRect.right,
+      lessThanOrEqualTo(cardRect.right),
+      reason: '$title CTA must stay inside the card horizontally',
+    );
+    expect(
+      ctaRect.left,
+      greaterThanOrEqualTo(cardRect.left),
+      reason: '$title CTA must not spill left of the card',
+    );
+  }
+}
+
 void main() {
   testWidgets('renders the hero and every featured build', (
     WidgetTester tester,
@@ -17,49 +52,103 @@ void main() {
     _useSize(tester, const Size(1440, 900));
 
     await tester.pumpWidget(const SarthakPortfolio());
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Sarthak Gupta.', findRichText: true), findsOneWidget);
-    expect(
-      find.image(const AssetImage('assets/hero_portrait.jpg')),
-      findsOneWidget,
-    );
+    expect(find.byType(Image), findsOneWidget);
     expect(find.text('Fridge Roulette'), findsOneWidget);
     expect(find.text('LIMS'), findsOneWidget);
     expect(find.text('PathKosh'), findsOneWidget);
     expect(find.text('More on GitHub'), findsOneWidget);
   });
 
-  testWidgets('keeps the source link inside every project card', (
+  testWidgets('has no idle animations after the page settles', (
     WidgetTester tester,
   ) async {
-    _useSize(tester, const Size(900, 1200));
+    _useSize(tester, const Size(1440, 900));
 
     await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
+  testWidgets('keeps both hero pills at the same height', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    final Size availability = tester.getSize(
+      find.byKey(const Key('hero-availability-pill')),
+    );
+    final Size lens = tester.getSize(find.byKey(const Key('hero-lens-pill')));
+
+    expect(availability.height, lens.height);
+    expect(availability.width, lens.width);
+  });
+
+  testWidgets('lens toggle settles without leaving a running animation', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('hero-lens-pill')));
     await tester.pump();
 
-    final Finder footers = find.byWidgetPredicate(
-      (widget) =>
-          widget is Text &&
-          (widget.data == 'View source' ||
-              widget.data == 'View on Google Play'),
+    final TestGesture mouse = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
     );
-    expect(footers, findsNWidgets(3));
+    await mouse.addPointer(location: const Offset(700, 450));
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(const Offset(720, 470));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
 
-    for (int i = 0; i < 3; i++) {
-      final Rect footerRect = tester.getRect(footers.at(i));
-      final Rect cardRect = tester.getRect(
-        find
-            .ancestor(
-              of: footers.at(i),
-              matching: find.byType(AnimatedContainer),
-            )
-            .first,
-      );
+    expect(tester.takeException(), isNull);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
 
-      expect(footerRect.bottom, lessThan(cardRect.bottom));
-      expect(footerRect.right, lessThanOrEqualTo(cardRect.right));
-    }
+  testWidgets('highlights the active section after a long scroll', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -4200),
+    );
+    await tester.pumpAndSettle();
+
+    final Text projectsNav = tester.widget<Text>(find.text('04. Projects'));
+    expect(projectsNav.style?.color, const Color(0xFF00E5FF));
+  });
+
+  testWidgets('pins the project CTAs to the bottom of their cards', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    final Rect first = tester.getRect(
+      find.byKey(const Key('project-cta-Fridge Roulette')),
+    );
+    final Rect second = tester.getRect(
+      find.byKey(const Key('project-cta-LIMS')),
+    );
+
+    expect((first.bottom - second.bottom).abs(), lessThan(1.0));
+    _expectCardsContained(tester);
   });
 
   for (final Size size in const [
@@ -73,11 +162,28 @@ void main() {
         _useSize(tester, size);
 
         await tester.pumpWidget(const SarthakPortfolio());
-        await tester.pump();
+        await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
         expect(find.text('Fridge Roulette'), findsOneWidget);
         expect(find.text('LIMS'), findsOneWidget);
+        _expectCardsContained(tester);
+      },
+    );
+  }
+
+  for (final Size size in const [Size(900, 1200), Size(1100, 900)]) {
+    testWidgets(
+      'keeps card content inside at ${size.width.toInt()}px and 160% text',
+      (WidgetTester tester) async {
+        _useSize(tester, size);
+        _useTextScale(tester, 1.6);
+
+        await tester.pumpWidget(const SarthakPortfolio());
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        _expectCardsContained(tester);
       },
     );
   }
