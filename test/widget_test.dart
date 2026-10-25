@@ -1,30 +1,43 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sarthak_portfolio/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('renders the hero and every featured build', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpWidget(const SarthakPortfolio());
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Sarthak Gupta.'), findsOneWidget);
+    expect(find.text('Fridge Roulette'), findsOneWidget);
+    expect(find.text('LIMS'), findsOneWidget);
+    expect(find.text('Hardware-Integrated Cart'), findsOneWidget);
+    expect(find.text('More on GitHub'), findsOneWidget);
   });
+
+  for (final Size size in const [
+    Size(360, 800),
+    Size(768, 1024),
+    Size(1440, 900),
+  ]) {
+    testWidgets(
+      'lays out without overflow at ${size.width.toInt()}x${size.height.toInt()}',
+      (WidgetTester tester) async {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(const SarthakPortfolio());
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Fridge Roulette'), findsOneWidget);
+        expect(find.text('LIMS'), findsOneWidget);
+      },
+    );
+  }
 }

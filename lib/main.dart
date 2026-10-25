@@ -674,10 +674,10 @@ class HeroSection extends StatelessWidget {
             children: const [
               TextSpan(
                 text:
-                    'I engineer scalable applications and immersive experiences across ',
+                    'I build offline-first products, on-device AI and immersive experiences across ',
               ),
               TextSpan(
-                text: 'Mobile, Web, and Game engines.',
+                text: 'Mobile, Desktop, and Game engines.',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w500,
@@ -916,15 +916,26 @@ class SkillsSection extends StatelessWidget {
             final c0 = buildCard(
               icon: Icons.phone_android_rounded,
               iconColor: const Color(0xFF00E5FF),
-              title: 'Mobile & Web',
+              title: 'Mobile & Desktop',
               skills: const [
                 'Flutter & Dart',
-                'Android & iOS',
-                'Firebase & REST APIs',
-                'Payment Integration',
+                'Android • iOS • Windows',
+                'Offline-First Architecture',
+                'Stripe & Payment Flows',
               ],
             );
             final c1 = buildCard(
+              icon: Icons.memory_rounded,
+              iconColor: const Color(0xFF4ADE80),
+              title: 'On-Device AI',
+              skills: const [
+                'On-Device LLMs (LiteRT)',
+                'YOLO & MediaPipe',
+                'ML Kit / OCR Pipelines',
+                'RAG & MCP Systems',
+              ],
+            );
+            final c2 = buildCard(
               icon: Icons.sports_esports_rounded,
               iconColor: Colors.purpleAccent,
               title: 'Game Dev',
@@ -935,26 +946,15 @@ class SkillsSection extends StatelessWidget {
                 'Object Pooling',
               ],
             );
-            final c2 = buildCard(
+            final c3 = buildCard(
               icon: Icons.terminal_rounded,
-              iconColor: Colors.grey,
+              iconColor: const Color(0xFFFFB347),
               title: 'Core Languages',
               skills: const [
                 'Java & C/C++',
                 'Data Structures',
+                'SQLite & MySQL',
                 'Problem Solving',
-                'SQL / MySQL',
-              ],
-            );
-            final c3 = buildCard(
-              icon: Icons.psychology_rounded,
-              iconColor: const Color(0xFFFFB347),
-              title: 'AI & ML',
-              skills: const [
-                'LLM Integration',
-                'RAG Systems',
-                'Model Fine-tuning',
-                'Model Context Protocol (MCP)',
               ],
             );
 
@@ -973,36 +973,29 @@ class SkillsSection extends StatelessWidget {
               );
             }
 
-            // Desktop — Expanded handles all width math, overflow is impossible
+            // Desktop / tablet: balanced 2 × 2 grid with equal-height rows
             return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Row 1: all three cards, equal width via Expanded.
-                // Let each card size to wrapped text instead of forcing a height.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: c0),
-                    SizedBox(width: cardSpacing),
-                    Expanded(child: c1),
-                    SizedBox(width: cardSpacing),
-                    Expanded(child: c2),
-                  ],
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: c0),
+                      SizedBox(width: cardSpacing),
+                      Expanded(child: c1),
+                    ],
+                  ),
                 ),
-
                 SizedBox(height: cardSpacing),
-
-                // Row 2: invisible Expanded spacer + card[3] + invisible Expanded spacer
-                // This keeps card[3] centred under card[1] at exactly 1/3 width
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Expanded(child: SizedBox.shrink()), // col 0 ghost
-                    SizedBox(width: cardSpacing),
-                    Expanded(child: c3), // col 1 = under c1
-                    SizedBox(width: cardSpacing),
-                    const Expanded(child: SizedBox.shrink()), // col 2 ghost
-                  ],
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: c2),
+                      SizedBox(width: cardSpacing),
+                      Expanded(child: c3),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -1361,95 +1354,173 @@ class ProjectsSection extends StatelessWidget {
     final double headerGap = (media.height * 0.045).clamp(24.0, 60.0);
     final double cardSpacing = (media.width * 0.020).clamp(12.0, 30.0);
 
-    // Card width: roughly half the content area on wide screens, nearly full on narrow
-    final double cardWidth = media.width > 800
-        ? (media.width * 0.38).clamp(280.0, 460.0)
-        : (media.width * 0.82).clamp(260.0, 500.0);
+    final projects = <_ProjectData>[
+      _ProjectData(
+        title: 'Fridge Roulette',
+        tagline: 'On-device AI cooking game for kids',
+        description:
+            'Snap one photo of your fridge and Fridge Roulette turns it into a cooking challenge. Two YOLO models and ML Kit label reading find the food, then a Qwen2.5 0.5B model writes a kid-safe recipe word by word — entirely on the phone, with no account, ads, or analytics.',
+        highlights: const [
+          '100% on-device inference — photos never leave the phone',
+          'Qwen2.5 0.5B streamed token-by-token via MediaPipe',
+          'COCO + FoodSeg103 detectors and a 96-food catalog',
+        ],
+        tags: const ['Flutter', 'On-Device LLM', 'YOLO', 'ML Kit OCR'],
+        status: 'Android • Offline',
+        accentColor: const Color(0xFF4ADE80),
+        icon: Icons.auto_awesome_rounded,
+        link: 'https://github.com/SarthakGupta2912/Fridge-Roulette',
+      ),
+      _ProjectData(
+        title: 'LIMS',
+        tagline: 'Offline-first billing & local shop ordering',
+        description:
+            'LIMS gives small shops a complete billing and order desk without a cloud backend. It runs on Android and Windows, keeps products, invoices, and orders in local SQLite, and lets customers join a shop hotspot by QR to browse the menu, place orders, and track pickup over the local network.',
+        highlights: const [
+          'SQLite is the source of truth, with delta sync between devices',
+          'QR-paired hotspot ordering over local Wi-Fi discovery',
+          'PDF invoices, templates, and role-based local profiles',
+        ],
+        tags: const ['Flutter', 'SQLite', 'Wi-Fi Direct', 'Windows'],
+        status: 'Android • Windows',
+        accentColor: const Color(0xFF00E5FF),
+        icon: Icons.receipt_long_rounded,
+        link: 'https://github.com/SarthakGupta2912/LIMS',
+      ),
+      _ProjectData(
+        title: 'Hardware-Integrated Cart',
+        tagline: 'Checkout secured by a physical GSM modem',
+        description:
+            'A software ordering application showcasing unique hardware integration, capable of validating customer transactions securely via OTP using a physical GSM modem.',
+        highlights: const [
+          'OTP-verified checkout through a physical GSM modem',
+          'End-to-end ordering flow backed by MySQL',
+        ],
+        tags: const ['Java', 'MySQL', 'GSM Hardware API'],
+        status: 'Java • Hardware',
+        accentColor: Colors.purpleAccent,
+        icon: Icons.layers_rounded,
+        link: 'https://github.com/SarthakGupta2912/ShoppingCart',
+      ),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(number: '04', title: 'Selected Builds', media: media),
         SizedBox(height: headerGap),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          clipBehavior: Clip.none,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ProjectCard(
-                title: 'LIMS Application',
-                description:
-                    'Localized Invoice Management System. A highly responsive desktop application built with Flutter featuring offline data storage and automated PDF invoice generation.',
-                tags: const ['Flutter', 'Dart', 'Desktop Dev'],
-                accentColor: const Color(0xFF00E5FF),
-                icon: Icons.code_rounded,
-                link: 'https://github.com/SarthakGupta2912/LIMS',
-                media: media,
-                cardWidth: cardWidth,
-              ),
-              SizedBox(width: cardSpacing),
-              ProjectCard(
-                title: 'Hardware-Integrated Cart',
-                description:
-                    'A software ordering application showcasing unique hardware integration, capable of validating customer transactions securely via OTP using a physical GSM modem.',
-                tags: const ['Java', 'MySQL', 'GSM Hardware API'],
-                accentColor: Colors.purpleAccent,
-                icon: Icons.layers_rounded,
-                link: 'https://github.com/SarthakGupta2912/ShoppingCart',
-                media: media,
-                cardWidth: cardWidth,
-              ),
-            ],
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final bool twoUp = constraints.maxWidth >= 760;
+
+            if (!twoUp) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ...projects.map(
+                    (p) => Padding(
+                      padding: EdgeInsets.only(bottom: cardSpacing),
+                      child: _ProjectCard(project: p, media: media),
+                    ),
+                  ),
+                  _MoreOnGitHubCard(media: media),
+                ],
+              );
+            }
+
+            return Column(
+              children: [
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _ProjectCard(project: projects[0], media: media),
+                      ),
+                      SizedBox(width: cardSpacing),
+                      Expanded(
+                        child: _ProjectCard(project: projects[1], media: media),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: cardSpacing),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _ProjectCard(project: projects[2], media: media),
+                      ),
+                      SizedBox(width: cardSpacing),
+                      Expanded(child: _MoreOnGitHubCard(media: media)),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 }
 
-class ProjectCard extends StatefulWidget {
+class _ProjectData {
   final String title;
+  final String tagline;
   final String description;
+  final List<String> highlights;
   final List<String> tags;
+  final String status;
   final Color accentColor;
   final IconData icon;
   final String link;
-  final Size media;
-  final double cardWidth; // ← new
 
-  const ProjectCard({
-    super.key,
+  const _ProjectData({
     required this.title,
+    required this.tagline,
     required this.description,
+    required this.highlights,
     required this.tags,
+    required this.status,
     required this.accentColor,
     required this.icon,
     required this.link,
-    required this.media,
-    required this.cardWidth, // ← new
   });
-
-  @override
-  State<ProjectCard> createState() => _ProjectCardState();
 }
 
-class _ProjectCardState extends State<ProjectCard> {
+class _ProjectCard extends StatefulWidget {
+  final _ProjectData project;
+  final Size media;
+
+  const _ProjectCard({required this.project, required this.media});
+
+  @override
+  State<_ProjectCard> createState() => _ProjectCardState();
+}
+
+class _ProjectCardState extends State<_ProjectCard> {
   bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
+    final _ProjectData project = widget.project;
     final Size media = widget.media;
-    final double pad = (media.shortestSide * 0.035).clamp(16.0, 40.0);
-    final double iconSize = (media.shortestSide * 0.042).clamp(22.0, 44.0);
-    final double openIconSize = (media.shortestSide * 0.022).clamp(14.0, 24.0);
-    final double titleSize = (media.width * 0.022).clamp(15.0, 28.0);
-    final double descSize = (media.width * 0.014).clamp(11.0, 16.0);
-    final double tagSize = (media.shortestSide * 0.012).clamp(9.0, 13.0);
-    final double innerGap1 = (media.height * 0.022).clamp(12.0, 28.0);
-    final double innerGap2 = (media.height * 0.016).clamp(8.0, 20.0);
-    final double innerGap3 = (media.height * 0.022).clamp(12.0, 28.0);
-    final double tagSpacing = (media.width * 0.010).clamp(6.0, 14.0);
+    final double pad = (media.shortestSide * 0.035).clamp(16.0, 36.0);
+    final double iconSize = (media.shortestSide * 0.042).clamp(22.0, 40.0);
+    final double openIconSize = (media.shortestSide * 0.022).clamp(14.0, 22.0);
+    final double titleSize = (media.width * 0.022).clamp(15.0, 26.0);
+    final double taglineSize = (media.width * 0.0135).clamp(10.0, 15.0);
+    final double descSize = (media.width * 0.014).clamp(11.0, 15.0);
+    final double bulletSize = (media.width * 0.0135).clamp(10.0, 14.0);
+    final double tagSize = (media.shortestSide * 0.012).clamp(9.0, 12.0);
+    final double statusSize = (media.shortestSide * 0.0105).clamp(8.0, 10.0);
+    final double innerGap1 = (media.height * 0.018).clamp(10.0, 22.0);
+    final double innerGap2 = (media.height * 0.012).clamp(6.0, 14.0);
+    final double innerGap3 = (media.height * 0.018).clamp(10.0, 22.0);
+    final double bulletGap = (media.height * 0.010).clamp(6.0, 12.0);
+    final double tagSpacing = (media.width * 0.008).clamp(5.0, 12.0);
     final double borderRadius = (media.shortestSide * 0.018).clamp(8.0, 20.0);
 
     return RepaintBoundary(
@@ -1458,11 +1529,13 @@ class _ProjectCardState extends State<ProjectCard> {
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
-          onTap: () => launchUrl(Uri.parse(widget.link)),
+          onTap: () => launchUrl(
+            Uri.parse(project.link),
+            mode: LaunchMode.externalApplication,
+          ),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
-            width: widget.cardWidth, // ← explicit width, no aspect ratio needed
             padding: EdgeInsets.all(pad),
             transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
             decoration: BoxDecoration(
@@ -1470,26 +1543,29 @@ class _ProjectCardState extends State<ProjectCard> {
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: _hovered
-                    ? Colors.white.withValues(alpha: 0.15)
+                    ? project.accentColor.withValues(alpha: 0.35)
                     : Colors.white.withValues(alpha: 0.05),
               ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min, // ← shrink-wraps height naturally
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
-                      widget.icon,
-                      color: widget.accentColor,
+                      project.icon,
+                      color: project.accentColor,
                       size: iconSize,
                     ),
-                    Icon(
-                      Icons.open_in_new_rounded,
-                      color: _hovered ? widget.accentColor : Colors.grey[600],
-                      size: openIconSize,
+                    _StatusPill(
+                      label: project.status,
+                      accentColor: project.accentColor,
+                      fontSize: statusSize,
+                      hPad: tagSpacing,
+                      vPad: tagSpacing * 0.4,
                     ),
                   ],
                 ),
@@ -1499,13 +1575,22 @@ class _ProjectCardState extends State<ProjectCard> {
                   style: TextStyle(
                     fontSize: titleSize,
                     fontWeight: FontWeight.bold,
-                    color: _hovered ? widget.accentColor : Colors.white,
+                    color: _hovered ? project.accentColor : Colors.white,
                   ),
-                  child: Text(widget.title),
+                  child: Text(project.title),
                 ),
                 SizedBox(height: innerGap2),
                 Text(
-                  widget.description,
+                  project.tagline,
+                  style: GoogleFonts.poppins(
+                    fontSize: taglineSize,
+                    color: project.accentColor.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: innerGap3),
+                Text(
+                  project.description,
                   style: TextStyle(
                     color: Colors.grey[400],
                     fontSize: descSize,
@@ -1513,20 +1598,224 @@ class _ProjectCardState extends State<ProjectCard> {
                   ),
                 ),
                 SizedBox(height: innerGap3),
+                ...project.highlights.map(
+                  (h) => Padding(
+                    padding: EdgeInsets.only(bottom: bulletGap),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '▸',
+                          style: TextStyle(
+                            color: project.accentColor,
+                            fontSize: bulletSize,
+                          ),
+                        ),
+                        SizedBox(width: tagSpacing),
+                        Expanded(
+                          child: Text(
+                            h,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: bulletSize,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: innerGap2),
                 Wrap(
                   spacing: tagSpacing,
                   runSpacing: tagSpacing * 0.6,
-                  children: widget.tags
+                  children: project.tags
                       .map(
-                        (t) => Text(
-                          t,
-                          style: GoogleFonts.poppins(
-                            fontSize: tagSize,
-                            color: Colors.grey[600],
+                        (t) => Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: tagSpacing,
+                            vertical: tagSpacing * 0.4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(3),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.06),
+                            ),
+                          ),
+                          child: Text(
+                            t,
+                            style: GoogleFonts.poppins(
+                              fontSize: tagSize,
+                              color: Colors.grey[500],
+                            ),
                           ),
                         ),
                       )
                       .toList(),
+                ),
+                SizedBox(height: innerGap1),
+                Row(
+                  children: [
+                    Text(
+                      'View source',
+                      style: GoogleFonts.poppins(
+                        fontSize: taglineSize,
+                        color: _hovered ? Colors.white : Colors.grey[500],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(width: tagSpacing),
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      color: _hovered ? project.accentColor : Colors.grey[600],
+                      size: openIconSize,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color accentColor;
+  final double fontSize;
+  final double hPad;
+  final double vPad;
+
+  const _StatusPill({
+    required this.label,
+    required this.accentColor,
+    required this.fontSize,
+    required this.hPad,
+    required this.vPad,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+      decoration: BoxDecoration(
+        color: accentColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: accentColor.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: GoogleFonts.poppins(
+          fontSize: fontSize,
+          color: accentColor,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _MoreOnGitHubCard extends StatefulWidget {
+  final Size media;
+  const _MoreOnGitHubCard({required this.media});
+
+  @override
+  State<_MoreOnGitHubCard> createState() => _MoreOnGitHubCardState();
+}
+
+class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final Size media = widget.media;
+    final double pad = (media.shortestSide * 0.035).clamp(16.0, 36.0);
+    final double iconSize = (media.shortestSide * 0.042).clamp(22.0, 40.0);
+    final double titleSize = (media.width * 0.022).clamp(15.0, 26.0);
+    final double bodySize = (media.width * 0.014).clamp(11.0, 15.0);
+    final double linkSize = (media.width * 0.0135).clamp(10.0, 14.0);
+    final double gap1 = (media.height * 0.018).clamp(10.0, 22.0);
+    final double gap2 = (media.height * 0.012).clamp(6.0, 14.0);
+
+    return RepaintBoundary(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.none,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: () => launchUrl(
+            Uri.parse('https://github.com/SarthakGupta2912'),
+            mode: LaunchMode.externalApplication,
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.all(pad),
+            transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.015),
+              borderRadius: BorderRadius.circular(
+                (media.shortestSide * 0.018).clamp(8.0, 20.0),
+              ),
+              border: Border.all(
+                color: _hovered
+                    ? Colors.white.withValues(alpha: 0.18)
+                    : Colors.white.withValues(alpha: 0.05),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.code_rounded,
+                  color: _hovered ? Colors.white : Colors.grey[500],
+                  size: iconSize,
+                ),
+                SizedBox(height: gap1),
+                Text(
+                  'More on GitHub',
+                  style: TextStyle(
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: gap2),
+                Text(
+                  'Game prototypes, AI experiments, and the rest of my builds live on my GitHub profile.',
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: bodySize,
+                    height: 1.6,
+                  ),
+                ),
+                SizedBox(height: gap1),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'github.com/SarthakGupta2912',
+                        style: GoogleFonts.poppins(
+                          fontSize: linkSize,
+                          color: _hovered ? Colors.white : Colors.grey[500],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: gap2),
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      color: _hovered ? Colors.white : Colors.grey[600],
+                      size: (media.shortestSide * 0.022).clamp(14.0, 22.0),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1570,8 +1859,72 @@ class Footer extends StatelessWidget {
             color: Colors.grey[700],
           ),
         ),
+        SizedBox(height: gap1),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: (media.width * 0.014).clamp(10.0, 22.0),
+          runSpacing: gap2,
+          children: [
+            _FooterLink(
+              label: 'GitHub',
+              url: 'https://github.com/SarthakGupta2912',
+              fontSize: fontSize,
+            ),
+            _FooterLink(
+              label: 'LinkedIn',
+              url: 'https://www.linkedin.com/in/sarthakgupta2912/',
+              fontSize: fontSize,
+            ),
+            _FooterLink(
+              label: 'Email',
+              url: 'mailto:sarthakgupta2912@gmail.com',
+              fontSize: fontSize,
+            ),
+          ],
+        ),
         SizedBox(height: gap3),
       ],
+    );
+  }
+}
+
+class _FooterLink extends StatefulWidget {
+  final String label;
+  final String url;
+  final double fontSize;
+
+  const _FooterLink({
+    required this.label,
+    required this.url,
+    required this.fontSize,
+  });
+
+  @override
+  State<_FooterLink> createState() => _FooterLinkState();
+}
+
+class _FooterLinkState extends State<_FooterLink> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () => launchUrl(
+          Uri.parse(widget.url),
+          mode: LaunchMode.externalApplication,
+        ),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 200),
+          style: GoogleFonts.poppins(
+            fontSize: widget.fontSize,
+            color: _hovered ? Colors.white : Colors.grey[600],
+          ),
+          child: Text(widget.label),
+        ),
+      ),
     );
   }
 }
