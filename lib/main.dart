@@ -567,6 +567,10 @@ class _LensOverlayPainter extends CustomPainter {
 
   static const double _radius = 230;
   static final Paint _glowPaint = Paint();
+  static final Paint _coverPaint = Paint()
+    ..color = const Color(0xFF050505)
+    ..strokeWidth = 3.6
+    ..strokeCap = StrokeCap.round;
   static final Paint _dotPaint = Paint()
     ..color = const Color(0x9900E5FF)
     ..strokeWidth = 3.2
@@ -578,12 +582,7 @@ class _LensOverlayPainter extends CustomPainter {
     final Offset mouse = repaint.smoothedPos;
     if (mouse.dx < 0 || mouse.dy < 0) return;
 
-    final Rect glow = Rect.fromCircle(center: mouse, radius: _radius);
-    _glowPaint.shader = const RadialGradient(
-      colors: [Color(0x1F00E5FF), Color(0x0000E5FF)],
-    ).createShader(glow);
-    canvas.drawCircle(mouse, _radius, _glowPaint);
-
+    final List<Offset> covers = <Offset>[];
     final List<Offset> points = <Offset>[];
     for (final Offset anchor in anchors) {
       final double dx = anchor.dx - mouse.dx;
@@ -591,6 +590,7 @@ class _LensOverlayPainter extends CustomPainter {
       final double distSq = dx * dx + dy * dy;
       if (distSq >= _radius * _radius) continue;
 
+      covers.add(anchor);
       final double dist = math.sqrt(distSq);
       final double t = 1 - dist / _radius;
       final double push = t * t * 12;
@@ -602,6 +602,17 @@ class _LensOverlayPainter extends CustomPainter {
         );
       }
     }
+
+    // Hide the inactive grey grid under the lens so only the cyan field reads.
+    if (covers.isNotEmpty) {
+      canvas.drawPoints(ui.PointMode.points, covers, _coverPaint);
+    }
+
+    final Rect glow = Rect.fromCircle(center: mouse, radius: _radius);
+    _glowPaint.shader = const RadialGradient(
+      colors: [Color(0x1F00E5FF), Color(0x0000E5FF)],
+    ).createShader(glow);
+    canvas.drawCircle(mouse, _radius, _glowPaint);
 
     if (points.isNotEmpty) {
       canvas.drawPoints(ui.PointMode.points, points, _dotPaint);
@@ -959,7 +970,7 @@ class HeroSection extends StatelessWidget {
             const SizedBox(width: 12),
             Flexible(
               child: Text(
-                'FLUTTER   ·   DART   ·   LITERT   ·   SQLITE   ·   UNITY',
+                'FLUTTER   ·   DART   ·   AI   ·   UNITY',
                 style: appPoppins(
                   fontSize: stackSize,
                   fontWeight: FontWeight.w500,
