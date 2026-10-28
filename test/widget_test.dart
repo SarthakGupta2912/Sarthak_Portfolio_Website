@@ -187,4 +187,31 @@ void main() {
       },
     );
   }
+
+  testWidgets('eases wheel scrolling instead of jumping', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    final ScrollableState scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable),
+    );
+
+    final TestPointer pointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(pointer.hover(const Offset(720, 450)));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 300)));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final double partial = scrollable.position.pixels;
+    expect(partial, greaterThan(0.0));
+    expect(partial, lessThan(300.0));
+
+    await tester.pumpAndSettle();
+
+    expect(scrollable.position.pixels, closeTo(300.0, 0.5));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
 }

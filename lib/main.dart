@@ -62,6 +62,167 @@ double _measureTextWidth(String text, TextStyle style, TextScaler scaler) {
   return width;
 }
 
+// ---------------------------------------------------------------------------
+// Smooth wheel scrolling
+// ---------------------------------------------------------------------------
+
+const double _smoothScrollStiffness = 22.0;
+const double _smoothScrollMaxVelocity = 7200.0;
+const double _smoothScrollSettleDistance = 0.35;
+
+/// A scroll controller that eases pointer-wheel/trackpad deltas instead of
+/// applying them as instant jumps.
+class _SmoothScrollController extends ScrollController {
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) {
+    return _SmoothScrollPosition(
+      physics: physics,
+      context: context,
+      initialPixels: initialScrollOffset,
+      keepScrollOffset: keepScrollOffset,
+      oldPosition: oldPosition,
+      debugLabel: debugLabel,
+    );
+  }
+}
+
+class _SmoothScrollPosition extends ScrollPositionWithSingleContext {
+  _SmoothScrollPosition({
+    required super.physics,
+    required super.context,
+    super.initialPixels,
+    super.keepScrollOffset,
+    super.oldPosition,
+    super.debugLabel,
+  });
+
+  @override
+  void pointerScroll(double delta) {
+    if (delta == 0.0 || !hasContentDimensions) return;
+
+    final ScrollActivity? current = activity;
+    final double base = current is _SmoothScrollActivity
+        ? current.target
+        : pixels;
+    final double target = (base + delta).clamp(
+      minScrollExtent,
+      maxScrollExtent,
+    );
+
+    updateUserScrollDirection(
+      -delta > 0.0 ? ScrollDirection.forward : ScrollDirection.reverse,
+    );
+
+    if (current is _SmoothScrollActivity) {
+      current.target = target;
+    } else if ((target - pixels).abs() > _smoothScrollSettleDistance) {
+      beginActivity(
+        _SmoothScrollActivity(
+          position: this,
+          vsync: context.vsync,
+          target: target,
+        ),
+      );
+    }
+  }
+}
+
+/// A small frame-driven chase toward a wheel target.
+///
+/// Keeping one activity alive while wheel events arrive lets every delta merge
+/// into a single continuous movement, rather than restarting an animation on
+/// each event.
+class _SmoothScrollActivity extends ScrollActivity {
+  _SmoothScrollActivity({
+    required _SmoothScrollPosition position,
+    required TickerProvider vsync,
+    required this.target,
+  }) : _position = position,
+       super(position) {
+    _ticker = vsync.createTicker(_tick)..start();
+  }
+
+  final _SmoothScrollPosition _position;
+  late final Ticker _ticker;
+  double target;
+  double _velocity = 0;
+  Duration _lastElapsed = Duration.zero;
+  bool _hasTicked = false;
+
+  @override
+  bool get isScrolling => true;
+
+  @override
+  bool get shouldIgnorePointer => false;
+
+  @override
+  double get velocity => _velocity;
+
+  void _tick(Duration elapsed) {
+    int elapsedMicros = (elapsed - _lastElapsed).inMicroseconds;
+    _lastElapsed = elapsed;
+
+    if (elapsedMicros <= 0) {
+      if (_hasTicked) return;
+      // Ticker's first callback reports zero elapsed time. Nudge the scroll on
+      // that first frame so the wheel never feels one frame behind.
+      elapsedMicros = Duration.microsecondsPerSecond ~/ 120;
+    }
+    _hasTicked = true;
+
+    final double dt = math.min(
+      elapsedMicros / Duration.microsecondsPerSecond,
+      0.05,
+    );
+    final double current = _position.pixels;
+    double remaining = target - current;
+
+    if (remaining.abs() <= _smoothScrollSettleDistance) {
+      _moveTo(target, current, dt);
+      delegate.goIdle();
+      return;
+    }
+
+    final double factor = 1 - math.exp(-_smoothScrollStiffness * dt);
+    double next = current + remaining * factor;
+
+    final double maxStep = _smoothScrollMaxVelocity * dt;
+    next = next.clamp(current - maxStep, current + maxStep);
+
+    remaining = target - next;
+    final bool reachedTarget = remaining.abs() <= _smoothScrollSettleDistance;
+    if (reachedTarget) next = target;
+
+    if (!_moveTo(next, current, dt)) {
+      delegate.goIdle();
+      return;
+    }
+
+    if (reachedTarget) delegate.goIdle();
+  }
+
+  bool _moveTo(double next, double previous, double dt) {
+    final double overscroll = delegate.setPixels(next);
+    _velocity = dt > 0 ? (_position.pixels - previous) / dt : 0;
+    return overscroll.abs() < 0.001;
+  }
+
+  @override
+  void applyNewDimensions() {
+    target = _position.pixels;
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+}
+
 class SarthakPortfolio extends StatelessWidget {
   const SarthakPortfolio({super.key});
 
@@ -148,7 +309,7 @@ class _PortfolioHomeState extends State<PortfolioHome> {
   );
 
   final LensAnimationState _lensState = LensAnimationState();
-  final ScrollController _scrollController = ScrollController();
+  final ScrollController _scrollController = _SmoothScrollController();
   final ValueNotifier<String> _activeTab = ValueNotifier<String>('home');
 
   final GlobalKey _heroKey = GlobalKey();
@@ -156,10 +317,19 @@ class _PortfolioHomeState extends State<PortfolioHome> {
   final GlobalKey _experienceKey = GlobalKey();
   final GlobalKey _projectsKey = GlobalKey();
 
+  final Map<GlobalKey, double> _sectionOffsets = <GlobalKey, double>{};
+  bool _sectionOffsetsScheduled = false;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleSectionOffsetRefresh();
   }
 
   @override
@@ -179,18 +349,43 @@ class _PortfolioHomeState extends State<PortfolioHome> {
     final double triggerLine =
         _scrollController.position.viewportDimension * 0.4;
 
+    final double projects = _sectionOffsets[_projectsKey] ?? double.infinity;
+    final double experience =
+        _sectionOffsets[_experienceKey] ?? double.infinity;
+    final double skills = _sectionOffsets[_skillsKey] ?? double.infinity;
+
     String newTab = 'home';
-    if (_hasReached(_projectsKey, scrollOffset, triggerLine)) {
+    if (scrollOffset >= projects - triggerLine) {
       newTab = 'projects';
-    } else if (_hasReached(_experienceKey, scrollOffset, triggerLine)) {
+    } else if (scrollOffset >= experience - triggerLine) {
       newTab = 'experience';
-    } else if (_hasReached(_skillsKey, scrollOffset, triggerLine)) {
+    } else if (scrollOffset >= skills - triggerLine) {
       newTab = 'skills';
     }
 
     if (newTab != _activeTab.value) {
       _activeTab.value = newTab;
     }
+  }
+
+  /// Section offsets are stable while scrolling, so cache them once per
+  /// layout instead of resolving three viewport positions on every frame.
+  void _scheduleSectionOffsetRefresh() {
+    if (_sectionOffsetsScheduled) return;
+    _sectionOffsetsScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sectionOffsetsScheduled = false;
+      if (!mounted) return;
+
+      _sectionOffsets
+        ..clear()
+        ..[_skillsKey] = _getSectionOffset(_skillsKey) ?? double.infinity
+        ..[_experienceKey] =
+            _getSectionOffset(_experienceKey) ?? double.infinity
+        ..[_projectsKey] = _getSectionOffset(_projectsKey) ?? double.infinity;
+
+      _onScroll();
+    });
   }
 
   /// Content offset of a section, independent of the current paint offset.
@@ -204,11 +399,6 @@ class _PortfolioHomeState extends State<PortfolioHome> {
     final RenderObject? box = ctx.findRenderObject();
     if (box is! RenderBox || !box.attached || !box.hasSize) return null;
     return RenderAbstractViewport.of(box).getOffsetToReveal(box, 0.0).offset;
-  }
-
-  bool _hasReached(GlobalKey key, double scrollOffset, double triggerLine) {
-    final double? sectionOffset = _getSectionOffset(key);
-    return sectionOffset != null && scrollOffset >= sectionOffset - triggerLine;
   }
 
   void _scrollTo(GlobalKey key, String tab) {
