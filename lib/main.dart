@@ -1886,7 +1886,8 @@ class ProjectsSection extends StatelessWidget {
         status: 'Android • Windows',
         accentColor: const Color(0xFF00E5FF),
         icon: Icons.receipt_long_rounded,
-        link: 'https://github.com/SarthakGupta2912/LIMS',
+        link: 'https://play.google.com/store/apps/details?id=com.Sarthak.lims',
+        ctaLabel: 'View on Google Play',
       ),
       _ProjectData(
         title: 'PathKosh',
