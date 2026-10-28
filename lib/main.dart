@@ -223,6 +223,199 @@ class _SmoothScrollActivity extends ScrollActivity {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Scroll reveal
+// ---------------------------------------------------------------------------
+
+/// Fades, lifts and gently scales its child into place the first time it
+/// approaches the viewport.
+///
+/// Each reveal caches the content offset of its own render box once per
+/// layout. Scrolling then only compares that cached value with the current
+/// scroll position, so the effect adds no render-tree walks to the scroll
+/// path. The animation itself is a compositor-friendly opacity + transform,
+/// and the controller stops as soon as the reveal is finished.
+class ScrollReveal extends StatefulWidget {
+  const ScrollReveal({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = const Duration(milliseconds: 520),
+    this.slideFrom = const Offset(0, 28),
+    this.scaleFrom = 0.96,
+    this.triggerLead = 120,
+    this.curve = Curves.easeOutCubic,
+  }) : assert(scaleFrom > 0.0 && scaleFrom <= 1.0),
+       assert(triggerLead >= 0.0);
+
+  final Widget child;
+
+  /// Delay before this reveal starts. The delay is part of the controller
+  /// timeline, so no separate timer is left pending.
+  final Duration delay;
+
+  final Duration duration;
+
+  /// Starting offset, in logical pixels. It eases to [Offset.zero].
+  final Offset slideFrom;
+
+  /// Starting scale. It eases to 1.0.
+  final double scaleFrom;
+
+  /// The reveal starts when the element is within this many logical pixels
+  /// below the bottom edge of the viewport.
+  final double triggerLead;
+
+  final Curve curve;
+
+  @override
+  State<ScrollReveal> createState() => _ScrollRevealState();
+}
+
+class _ScrollRevealState extends State<ScrollReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late Animation<double> _animation;
+  ScrollPosition? _position;
+  double? _triggerOffset;
+  bool _revealed = false;
+  bool _measureScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.delay + widget.duration,
+    );
+    _animation = _buildAnimation();
+  }
+
+  Animation<double> _buildAnimation() {
+    final Duration total = widget.delay + widget.duration;
+    final double delayFraction = total.inMicroseconds == 0
+        ? 0.0
+        : math.min(1.0, widget.delay.inMicroseconds / total.inMicroseconds);
+    return _controller.drive(
+      Tween<double>(begin: 0, end: 1).chain(
+        CurveTween(curve: Interval(delayFraction, 1.0, curve: widget.curve)),
+      ),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant ScrollReveal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.delay != widget.delay ||
+        oldWidget.duration != widget.duration ||
+        oldWidget.curve != widget.curve) {
+      _controller.duration = widget.delay + widget.duration;
+      _animation = _buildAnimation();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final ScrollPosition? position = Scrollable.maybeOf(context)?.position;
+    if (!identical(position, _position)) {
+      _position?.removeListener(_handleScroll);
+      _position = position;
+      _position?.addListener(_handleScroll);
+    }
+
+    if (position == null || MediaQuery.disableAnimationsOf(context)) {
+      _reveal(immediate: true);
+    } else if (!_revealed) {
+      _scheduleMeasure();
+    }
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_handleScroll);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() => _checkReveal();
+
+  void _scheduleMeasure() {
+    if (_measureScheduled || _revealed) return;
+    _measureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measureScheduled = false;
+      if (!mounted || _revealed) return;
+      _measureTrigger();
+      _checkReveal();
+    });
+  }
+
+  void _measureTrigger() {
+    final RenderObject? renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return;
+    }
+    _triggerOffset = RenderAbstractViewport.of(
+      renderObject,
+    ).getOffsetToReveal(renderObject, 0.0).offset;
+  }
+
+  void _checkReveal() {
+    if (_revealed || !mounted) return;
+
+    final ScrollPosition? position = _position;
+    final double? trigger = _triggerOffset;
+    if (position == null || trigger == null || !position.hasContentDimensions) {
+      return;
+    }
+
+    final double viewportBottom = position.pixels + position.viewportDimension;
+    if (viewportBottom + widget.triggerLead >= trigger) {
+      _reveal();
+    }
+  }
+
+  void _reveal({bool immediate = false}) {
+    if (_revealed) return;
+    _revealed = true;
+    _position?.removeListener(_handleScroll);
+    if (immediate) {
+      _controller.value = 1.0;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      child: widget.child,
+      builder: (context, child) {
+        final double t = _animation.value;
+        final double scale = widget.scaleFrom + (1.0 - widget.scaleFrom) * t;
+        final Offset offset = Offset(
+          widget.slideFrom.dx * (1.0 - t),
+          widget.slideFrom.dy * (1.0 - t),
+        );
+
+        Widget result = child!;
+        if (widget.scaleFrom != 1.0) {
+          result = Transform.scale(scale: scale, child: result);
+        }
+        if (widget.slideFrom != Offset.zero) {
+          result = Transform.translate(offset: offset, child: result);
+        }
+        return Opacity(opacity: t, child: result);
+      },
+    );
+  }
+}
+
 class SarthakPortfolio extends StatelessWidget {
   const SarthakPortfolio({super.key});
 
@@ -494,7 +687,12 @@ class _PortfolioHomeState extends State<PortfolioHome> {
                           ),
                         ),
                         SizedBox(height: sectionGap * 0.75),
-                        const RepaintBoundary(child: Footer()),
+                        ScrollReveal(
+                          duration: const Duration(milliseconds: 460),
+                          slideFrom: const Offset(0, 16),
+                          scaleFrom: 1.0,
+                          child: const RepaintBoundary(child: Footer()),
+                        ),
                       ],
                     ),
                   ),
@@ -1578,7 +1776,14 @@ class SkillsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(number: '02', title: 'Arsenal', media: media),
+        ScrollReveal(
+          duration: const Duration(milliseconds: 460),
+          slideFrom: const Offset(0, 18),
+          scaleFrom: 1.0,
+          child: RepaintBoundary(
+            child: SectionHeader(number: '02', title: 'Arsenal', media: media),
+          ),
+        ),
         SizedBox(height: headerGap),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -1590,20 +1795,27 @@ class SkillsSection extends StatelessWidget {
             );
 
             // Card builder — no cardWidth needed
-            TiltCard buildCard({
+            Widget buildCard({
+              required int index,
               required IconData icon,
               required Color iconColor,
               required String title,
               required List<String> skills,
-            }) => TiltCard(
-              icon: icon,
-              iconColor: iconColor,
-              title: title,
-              skills: skills,
-              media: media,
+            }) => ScrollReveal(
+              delay: Duration(milliseconds: 70 * index),
+              slideFrom: const Offset(0, 26),
+              scaleFrom: 0.96,
+              child: TiltCard(
+                icon: icon,
+                iconColor: iconColor,
+                title: title,
+                skills: skills,
+                media: media,
+              ),
             );
 
             final c0 = buildCard(
+              index: 0,
               icon: Icons.phone_android_rounded,
               iconColor: const Color(0xFF00E5FF),
               title: 'Mobile & Desktop',
@@ -1615,6 +1827,7 @@ class SkillsSection extends StatelessWidget {
               ],
             );
             final c1 = buildCard(
+              index: 1,
               icon: Icons.memory_rounded,
               iconColor: const Color(0xFF4ADE80),
               title: 'On-Device AI',
@@ -1626,6 +1839,7 @@ class SkillsSection extends StatelessWidget {
               ],
             );
             final c2 = buildCard(
+              index: 2,
               icon: Icons.sports_esports_rounded,
               iconColor: Colors.purpleAccent,
               title: 'Game Dev',
@@ -1637,6 +1851,7 @@ class SkillsSection extends StatelessWidget {
               ],
             );
             final c3 = buildCard(
+              index: 3,
               icon: Icons.terminal_rounded,
               iconColor: const Color(0xFFFFB347),
               title: 'Core Languages',
@@ -1818,10 +2033,29 @@ class ExperienceSection extends StatelessWidget {
     final double headerGap = (media.height * 0.060).clamp(32.0, 80.0);
     final double itemGap = (media.height * 0.060).clamp(32.0, 80.0);
 
+    Widget revealItem(int index, Widget item) => ScrollReveal(
+      delay: Duration(milliseconds: 80 * index),
+      duration: const Duration(milliseconds: 520),
+      slideFrom: const Offset(-20, 0),
+      scaleFrom: 1.0,
+      child: RepaintBoundary(child: item),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(number: '03', title: 'Experience', media: media),
+        ScrollReveal(
+          duration: const Duration(milliseconds: 460),
+          slideFrom: const Offset(0, 18),
+          scaleFrom: 1.0,
+          child: RepaintBoundary(
+            child: SectionHeader(
+              number: '03',
+              title: 'Experience',
+              media: media,
+            ),
+          ),
+        ),
         SizedBox(height: headerGap),
         Container(
           margin: EdgeInsets.only(left: (media.width * 0.008).clamp(4.0, 12.0)),
@@ -1832,43 +2066,52 @@ class ExperienceSection extends StatelessWidget {
           ),
           child: Column(
             children: [
-              ExperienceItem(
-                media: media,
-                title: 'Software Developer',
-                company: 'BigVision Software Services',
-                companyColor: const Color(0xFF00E5FF),
-                period: 'Feb 2024 – Present',
-                points: const [
-                  'Led Flutter front-end dev, accelerating feature rollouts by 25%.',
-                  'Integrated OpenAI ChatGPT APIs, driving 15% increase in engagement.',
-                  'Optimized API latency by 30% and implemented robust Stripe payment flows.',
-                  'Slashed crash incidents by 90% via lazy loading and intelligent caching.',
-                ],
+              revealItem(
+                0,
+                ExperienceItem(
+                  media: media,
+                  title: 'Software Developer',
+                  company: 'BigVision Software Services',
+                  companyColor: const Color(0xFF00E5FF),
+                  period: 'Feb 2024 – Present',
+                  points: const [
+                    'Led Flutter front-end dev, accelerating feature rollouts by 25%.',
+                    'Integrated OpenAI ChatGPT APIs, driving 15% increase in engagement.',
+                    'Optimized API latency by 30% and implemented robust Stripe payment flows.',
+                    'Slashed crash incidents by 90% via lazy loading and intelligent caching.',
+                  ],
+                ),
               ),
               SizedBox(height: itemGap),
-              ExperienceItem(
-                media: media,
-                title: 'Game Developer Intern',
-                company: 'Immersivevision Technology',
-                companyColor: Colors.purpleAccent,
-                period: 'Feb 2022 – Jul 2022',
-                points: const [
-                  'Developed immersive virtual environments and mechanics in Unity.',
-                  'Integrated Cinemachine for dynamic camera control and cutscenes.',
-                  'Implemented Object Pooling, minimizing runtime allocations and GC overhead.',
-                ],
+              revealItem(
+                1,
+                ExperienceItem(
+                  media: media,
+                  title: 'Game Developer Intern',
+                  company: 'Immersivevision Technology',
+                  companyColor: Colors.purpleAccent,
+                  period: 'Feb 2022 – Jul 2022',
+                  points: const [
+                    'Developed immersive virtual environments and mechanics in Unity.',
+                    'Integrated Cinemachine for dynamic camera control and cutscenes.',
+                    'Implemented Object Pooling, minimizing runtime allocations and GC overhead.',
+                  ],
+                ),
               ),
               SizedBox(height: itemGap),
-              ExperienceItem(
-                media: media,
-                title: 'Game Developer Intern',
-                company: 'K12 Techno Services',
-                companyColor: Colors.grey,
-                period: 'Aug 2021 – Oct 2021',
-                points: const [
-                  'Coded game logic for educational games using Unity and C#.',
-                  'Collaborated closely with design teams to ensure engaging UX.',
-                ],
+              revealItem(
+                2,
+                ExperienceItem(
+                  media: media,
+                  title: 'Game Developer Intern',
+                  company: 'K12 Techno Services',
+                  companyColor: Colors.grey,
+                  period: 'Aug 2021 – Oct 2021',
+                  points: const [
+                    'Coded game logic for educational games using Unity and C#.',
+                    'Collaborated closely with design teams to ensure engaging UX.',
+                  ],
+                ),
               ),
             ],
           ),
@@ -2045,6 +2288,14 @@ class ProjectsSection extends StatelessWidget {
     final double headerGap = (media.height * 0.045).clamp(24.0, 60.0);
     final double cardSpacing = (media.width * 0.020).clamp(12.0, 30.0);
 
+    Widget revealCard(int index, Widget card) => ScrollReveal(
+      delay: Duration(milliseconds: 70 * index),
+      duration: const Duration(milliseconds: 540),
+      slideFrom: const Offset(0, 32),
+      scaleFrom: 0.95,
+      child: card,
+    );
+
     final projects = <_ProjectData>[
       _ProjectData(
         title: 'Fridge Roulette',
@@ -2107,7 +2358,18 @@ class ProjectsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(number: '04', title: 'Selected Builds', media: media),
+        ScrollReveal(
+          duration: const Duration(milliseconds: 460),
+          slideFrom: const Offset(0, 18),
+          scaleFrom: 1.0,
+          child: RepaintBoundary(
+            child: SectionHeader(
+              number: '04',
+              title: 'Selected Builds',
+              media: media,
+            ),
+          ),
+        ),
         SizedBox(height: headerGap),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -2117,13 +2379,16 @@ class ProjectsSection extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ...projects.map(
-                    (p) => Padding(
+                  ...projects.asMap().entries.map(
+                    (entry) => Padding(
                       padding: EdgeInsets.only(bottom: cardSpacing),
-                      child: _ProjectCard(project: p, media: media),
+                      child: revealCard(
+                        entry.key,
+                        _ProjectCard(project: entry.value, media: media),
+                      ),
                     ),
                   ),
-                  _MoreOnGitHubCard(media: media),
+                  revealCard(3, _MoreOnGitHubCard(media: media)),
                 ],
               );
             }
@@ -2138,19 +2403,25 @@ class ProjectsSection extends StatelessWidget {
                     children: [
                       SizedBox(
                         width: cardWidth,
-                        child: _ProjectCard(
-                          project: projects[0],
-                          media: media,
-                          fillHeight: true,
+                        child: revealCard(
+                          0,
+                          _ProjectCard(
+                            project: projects[0],
+                            media: media,
+                            fillHeight: true,
+                          ),
                         ),
                       ),
                       SizedBox(width: cardSpacing),
                       SizedBox(
                         width: cardWidth,
-                        child: _ProjectCard(
-                          project: projects[1],
-                          media: media,
-                          fillHeight: true,
+                        child: revealCard(
+                          1,
+                          _ProjectCard(
+                            project: projects[1],
+                            media: media,
+                            fillHeight: true,
+                          ),
                         ),
                       ),
                     ],
@@ -2163,18 +2434,21 @@ class ProjectsSection extends StatelessWidget {
                     children: [
                       SizedBox(
                         width: cardWidth,
-                        child: _ProjectCard(
-                          project: projects[2],
-                          media: media,
-                          fillHeight: true,
+                        child: revealCard(
+                          2,
+                          _ProjectCard(
+                            project: projects[2],
+                            media: media,
+                            fillHeight: true,
+                          ),
                         ),
                       ),
                       SizedBox(width: cardSpacing),
                       SizedBox(
                         width: cardWidth,
-                        child: _MoreOnGitHubCard(
-                          media: media,
-                          fillHeight: true,
+                        child: revealCard(
+                          3,
+                          _MoreOnGitHubCard(media: media, fillHeight: true),
                         ),
                       ),
                     ],

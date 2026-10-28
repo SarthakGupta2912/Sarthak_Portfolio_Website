@@ -214,4 +214,106 @@ void main() {
     expect(scrollable.position.pixels, closeTo(300.0, 0.5));
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
+
+  testWidgets('reveals project cards as they enter the viewport', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    final Finder card = find.byKey(const Key('project-card-Fridge Roulette'));
+    final Finder opacity = find.ancestor(
+      of: card,
+      matching: find.byType(Opacity),
+    );
+
+    expect(opacity, findsOneWidget);
+    expect(tester.widget<Opacity>(opacity).opacity, 0.0);
+
+    final ScrollableState scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable),
+    );
+    scrollable.position.jumpTo(2500);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    final double partial = tester.widget<Opacity>(opacity).opacity;
+    expect(partial, greaterThan(0.0));
+    expect(partial, lessThan(1.0));
+
+    await tester.pumpAndSettle();
+    expect(tester.widget<Opacity>(opacity).opacity, 1.0);
+  });
+
+  testWidgets('reveals the footer at the bottom of the page', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    final Finder footer = find.text('Designed and Engineered by Sarthak Gupta');
+    final Finder opacity = find.ancestor(
+      of: footer,
+      matching: find.byType(Opacity),
+    );
+
+    expect(opacity, findsOneWidget);
+    expect(tester.widget<Opacity>(opacity).opacity, 0.0);
+
+    final ScrollableState scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable),
+    );
+    scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Opacity>(opacity).opacity, 1.0);
+  });
+
+  testWidgets('reveals content as it scrolls into view', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                SizedBox(height: 1600),
+                ScrollReveal(
+                  child: SizedBox(
+                    key: Key('reveal-target'),
+                    width: 120,
+                    height: 120,
+                    child: ColoredBox(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final Finder target = find.byKey(const Key('reveal-target'));
+    final Finder opacity = find.ancestor(
+      of: target,
+      matching: find.byType(Opacity),
+    );
+
+    expect(opacity, findsOneWidget);
+    expect(tester.widget<Opacity>(opacity).opacity, 0.0);
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -1400),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Opacity>(opacity).opacity, 1.0);
+  });
 }
