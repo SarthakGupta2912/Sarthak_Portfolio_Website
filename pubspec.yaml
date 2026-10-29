@@ -24,5 +24,32 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - assets/hero_portrait.jpg
-    - assets/fonts/
+    - assets/hero_portrait.webp
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+    # CanvasKit always loads a "Roboto" default fallback from gstatic unless
+    # the manifest already provides one. Point that family at our local Inter
+    # files so a normal visit never needs the extra 62 KB CDN request.
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

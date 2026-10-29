@@ -30,15 +30,263 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Sarthak Gupta">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-180.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>Sarthak Gupta | Flutter &amp; On-Device AI Engineer</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Start the two network-heavy dependencies while the bootstrap is still
+       parsing. CanvasKit is served from gstatic, so open its connection first. -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
+  <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="assets/assets/fonts/Inter-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Inter-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Inter-Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Poppins-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Poppins-Medium.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/fonts/Poppins-SemiBold.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/assets/hero_portrait.webp" as="image">
+
+  <script>
+    // Match the loader's Chromium CanvasKit selection so the wasm download can
+    // begin before main.dart.js has initialized. Keep the engine revision in
+    // sync with flutter_bootstrap.js when upgrading Flutter.
+    (function () {
+      var isBlink =
+        navigator.vendor === 'Google Inc.' ||
+        navigator.userAgent.indexOf('Edg/') !== -1;
+      var hasImageCodecs =
+        typeof ImageDecoder !== 'undefined' && isBlink;
+      var hasChromiumBreakIterators =
+        typeof Intl.v8BreakIterator !== 'undefined' &&
+        typeof Intl.Segmenter !== 'undefined';
+
+      if (!hasImageCodecs || !hasChromiumBreakIterators) return;
+
+      var link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'fetch';
+      link.crossOrigin = 'anonymous';
+      link.href =
+        'https://www.gstatic.com/flutter-canvaskit/' +
+        '83675ed27633283e7fc296c8bca22e841224c096' +
+        '/chromium/canvaskit.wasm';
+      document.head.appendChild(link);
+    })();
+  </script>
+
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #050505;
+    }
+
+    #boot-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(0, 229, 255, 0.10), transparent 38%),
+        radial-gradient(circle at 92% 82%, rgba(0, 229, 255, 0.05), transparent 32%),
+        #050505;
+      color: #fff;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      transition: opacity 360ms ease, visibility 360ms ease;
+    }
+
+    #boot-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+      background-size: 34px 34px;
+      opacity: 0.28;
+      pointer-events: none;
+    }
+
+    #boot-shell.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .boot-inner {
+      position: relative;
+      z-index: 1;
+      width: min(920px, calc(100vw - 64px));
+      padding: 24px 0;
+    }
+
+    .boot-kicker {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+      color: #7b7b82;
+      font-family: "Poppins", "Segoe UI", system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+    }
+
+    .boot-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00e5ff;
+      box-shadow: 0 0 14px rgba(0, 229, 255, 0.85);
+    }
+
+    .boot-inner h1 {
+      margin: 0;
+      font-size: clamp(42px, 7vw, 78px);
+      font-weight: 700;
+      letter-spacing: -2.5px;
+      line-height: 1.02;
+    }
+
+    .boot-inner h1 span {
+      color: #00e5ff;
+    }
+
+    .boot-inner p {
+      max-width: 620px;
+      margin: 20px 0 0;
+      color: #8a8a92;
+      font-size: clamp(14px, 1.5vw, 18px);
+      line-height: 1.65;
+    }
+
+    .boot-stack {
+      margin-top: 30px;
+      color: #5e5e66;
+      font-family: "Poppins", "Segoe UI", system-ui, sans-serif;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 2.6px;
+      white-space: nowrap;
+    }
+
+    .boot-stack i {
+      padding: 0 7px;
+      color: #34343a;
+      font-style: normal;
+    }
+
+    .boot-progress {
+      width: min(280px, 60vw);
+      height: 2px;
+      margin-top: 38px;
+      overflow: hidden;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .boot-progress span {
+      display: block;
+      width: 38%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, transparent, #00e5ff, transparent);
+      animation: boot-slide 1.35s ease-in-out infinite;
+    }
+
+    @keyframes boot-slide {
+      0% { transform: translateX(-110%); }
+      100% { transform: translateX(370%); }
+    }
+
+    @media (max-width: 600px) {
+      .boot-inner {
+        width: calc(100vw - 40px);
+      }
+
+      .boot-kicker {
+        margin-bottom: 18px;
+      }
+
+      .boot-inner p {
+        margin-top: 16px;
+      }
+
+      .boot-stack {
+        margin-top: 24px;
+        letter-spacing: 1.8px;
+      }
+
+      .boot-progress {
+        margin-top: 30px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #boot-shell {
+        transition: none;
+      }
+
+      .boot-progress span {
+        width: 100%;
+        animation: none;
+      }
+    }
+  </style>
 </head>
-<body style="background-color:#050505">
+<body>
+  <div id="boot-shell" role="status" aria-label="Loading Sarthak Gupta's portfolio">
+    <div class="boot-inner">
+      <div class="boot-kicker"><span class="boot-dot"></span> Portfolio / 2026</div>
+      <h1>Sarthak Gupta<span>.</span></h1>
+      <p>Flutter engineer building offline-first products and on-device AI.</p>
+      <div class="boot-stack">FLUTTER <i>·</i> DART <i>·</i> AI <i>·</i> UNITY</div>
+      <div class="boot-progress"><span></span></div>
+    </div>
+  </div>
+
+  <noscript>
+    <div style="position:fixed;inset:0;display:grid;place-items:center;padding:24px;background:#050505;color:#fff;font-family:system-ui,sans-serif;text-align:center;">
+      <div>
+        <h1 style="margin:0 0 12px;">Sarthak Gupta</h1>
+        <p style="color:#8a8a92;">This portfolio needs JavaScript. Please enable it to view the interactive version.</p>
+      </div>
+    </div>
+  </noscript>
+
+  <script>
+    (function () {
+      var shell = document.getElementById('boot-shell');
+      if (!shell) return;
+
+      var hidden = false;
+      function hideShell() {
+        if (hidden) return;
+        hidden = true;
+        shell.classList.add('is-hidden');
+        window.setTimeout(function () {
+          if (shell.parentNode) shell.parentNode.removeChild(shell);
+        }, 420);
+      }
+
+      window.addEventListener('flutter-first-frame', hideShell, { once: true });
+
+      // Safety net: if the Flutter event is ever missed, do not leave the
+      // loading shell covering an already-painted app.
+      window.setTimeout(function () {
+        if (document.querySelector('flt-glass-pane')) hideShell();
+      }, 10000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

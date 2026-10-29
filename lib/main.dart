@@ -4,32 +4,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await _preloadFonts();
-  } catch (error, stackTrace) {
-    debugPrint('Font preload failed: $error\n$stackTrace');
-  }
   runApp(const SarthakPortfolio());
-}
-
-/// Loads bundled fonts before the first frame so the first paint uses the
-/// intended typefaces instead of a fallback font.
-Future<void> _preloadFonts() async {
-  final FontLoader inter = FontLoader('Inter')
-    ..addFont(rootBundle.load('assets/fonts/Inter-Regular.ttf'))
-    ..addFont(rootBundle.load('assets/fonts/Inter-Medium.ttf'))
-    ..addFont(rootBundle.load('assets/fonts/Inter-Bold.ttf'));
-  final FontLoader poppins = FontLoader('Poppins')
-    ..addFont(rootBundle.load('assets/fonts/Poppins-Regular.ttf'))
-    ..addFont(rootBundle.load('assets/fonts/Poppins-Medium.ttf'))
-    ..addFont(rootBundle.load('assets/fonts/Poppins-SemiBold.ttf'));
-
-  await Future.wait([inter.load(), poppins.load()]);
 }
 
 /// Poppins is bundled with the app so the web build never waits on a font CDN.
@@ -66,9 +45,13 @@ double _measureTextWidth(String text, TextStyle style, TextScaler scaler) {
 // Smooth wheel scrolling
 // ---------------------------------------------------------------------------
 
-const double _smoothScrollStiffness = 22.0;
+// A critically damped spring rather than a fixed exponential chase. The
+// spring keeps velocity continuous when new wheel events arrive, so repeated
+// trackpad ticks blend into one gesture instead of re-starting an ease.
+const double _smoothScrollAngularFrequency = 26.0;
 const double _smoothScrollMaxVelocity = 7200.0;
 const double _smoothScrollSettleDistance = 0.35;
+const double _smoothScrollSettleVelocity = 24.0;
 
 /// A scroll controller that eases pointer-wheel/trackpad deltas instead of
 /// applying them as instant jumps.
@@ -181,28 +164,51 @@ class _SmoothScrollActivity extends ScrollActivity {
     final double current = _position.pixels;
     double remaining = target - current;
 
-    if (remaining.abs() <= _smoothScrollSettleDistance) {
+    if (remaining.abs() <= _smoothScrollSettleDistance &&
+        _velocity.abs() <= _smoothScrollSettleVelocity) {
       _moveTo(target, current, dt);
       delegate.goIdle();
       return;
     }
 
-    final double factor = 1 - math.exp(-_smoothScrollStiffness * dt);
-    double next = current + remaining * factor;
+    final double acceleration =
+        _smoothScrollAngularFrequency *
+            _smoothScrollAngularFrequency *
+            remaining -
+        2 * _smoothScrollAngularFrequency * _velocity;
+    double nextVelocity = _velocity + acceleration * dt;
+    nextVelocity = nextVelocity.clamp(
+      -_smoothScrollMaxVelocity,
+      _smoothScrollMaxVelocity,
+    );
 
-    final double maxStep = _smoothScrollMaxVelocity * dt;
-    next = next.clamp(current - maxStep, current + maxStep);
+    double next = current + nextVelocity * dt;
 
-    remaining = target - next;
-    final bool reachedTarget = remaining.abs() <= _smoothScrollSettleDistance;
-    if (reachedTarget) next = target;
+    // A spring is allowed to overshoot; a scroll view is not. If the spring
+    // would pass the target this frame, land on it and let the activity go
+    // idle instead of showing a tiny rebound.
+    final bool crossedTarget =
+        (remaining > 0 && next >= target) || (remaining < 0 && next <= target);
+    if (crossedTarget) {
+      next = target;
+      nextVelocity = 0;
+    }
 
     if (!_moveTo(next, current, dt)) {
       delegate.goIdle();
       return;
     }
 
-    if (reachedTarget) delegate.goIdle();
+    if (crossedTarget) {
+      delegate.goIdle();
+      return;
+    }
+
+    remaining = target - _position.pixels;
+    if (remaining.abs() <= _smoothScrollSettleDistance &&
+        _velocity.abs() <= _smoothScrollSettleVelocity) {
+      delegate.goIdle();
+    }
   }
 
   bool _moveTo(double next, double previous, double dt) {
@@ -214,6 +220,7 @@ class _SmoothScrollActivity extends ScrollActivity {
   @override
   void applyNewDimensions() {
     target = _position.pixels;
+    _velocity = 0;
   }
 
   @override
@@ -404,11 +411,16 @@ class _ScrollRevealState extends State<ScrollReveal>
         );
 
         Widget result = child!;
-        if (widget.scaleFrom != 1.0) {
-          result = Transform.scale(scale: scale, child: result);
-        }
-        if (widget.slideFrom != Offset.zero) {
-          result = Transform.translate(offset: offset, child: result);
+        // Compose the lift and scale into one transform layer. At rest the
+        // transform is skipped entirely, so settled cards only pay for the
+        // opacity layer that the reveal API guarantees.
+        if (t > 0.0 && t < 1.0) {
+          final Matrix4 transform = Matrix4.translationValues(
+            offset.dx,
+            offset.dy,
+            0,
+          )..scaleByDouble(scale, scale, 1, 1);
+          result = Transform(transform: transform, child: result);
         }
         return Opacity(opacity: t, child: result);
       },
@@ -1425,7 +1437,7 @@ class _HeroPortrait extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 Image.asset(
-                  'assets/hero_portrait.jpg',
+                  'assets/hero_portrait.webp',
                   fit: BoxFit.cover,
                   alignment: Alignment.topCenter,
                   filterQuality: FilterQuality.medium,
@@ -1992,12 +2004,10 @@ class _TiltCardState extends State<TiltCard> {
                   padding: EdgeInsets.only(bottom: skillBottomPad),
                   child: Row(
                     children: [
-                      Text(
-                        '▹',
-                        style: TextStyle(
-                          color: widget.iconColor,
-                          fontSize: skillArrowSize,
-                        ),
+                      Icon(
+                        Icons.play_arrow_rounded,
+                        color: widget.iconColor,
+                        size: skillArrowSize * 1.2,
                       ),
                       SizedBox(width: skillIconGap),
                       Expanded(
@@ -2246,12 +2256,10 @@ class ExperienceItem extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '▹',
-                        style: TextStyle(
-                          color: companyColor,
-                          fontSize: arrowSize,
-                        ),
+                      Icon(
+                        Icons.play_arrow_rounded,
+                        color: companyColor,
+                        size: arrowSize * 1.2,
                       ),
                       SizedBox(width: arrowGap),
                       Expanded(
@@ -2585,6 +2593,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                 AnimatedDefaultTextStyle(
                   duration: const Duration(milliseconds: 250),
                   style: TextStyle(
+                    fontFamily: 'Inter',
                     fontSize: titleSize,
                     fontWeight: FontWeight.bold,
                     color: _hovered ? project.accentColor : Colors.white,
@@ -2616,12 +2625,10 @@ class _ProjectCardState extends State<_ProjectCard> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '▸',
-                          style: TextStyle(
-                            color: project.accentColor,
-                            fontSize: bulletSize,
-                          ),
+                        Icon(
+                          Icons.play_arrow_rounded,
+                          color: project.accentColor,
+                          size: bulletSize * 1.2,
                         ),
                         SizedBox(width: tagSpacing),
                         Expanded(
@@ -2764,8 +2771,33 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
     final double titleSize = (media.width * 0.022).clamp(15.0, 26.0);
     final double bodySize = (media.width * 0.014).clamp(11.0, 15.0);
     final double linkSize = (media.width * 0.0135).clamp(10.0, 14.0);
+    final double rowTitleSize = (media.width * 0.0135).clamp(10.0, 14.0);
+    final double rowDetailSize = (media.width * 0.0125).clamp(9.0, 12.0);
+    final double rowIconSize = (media.shortestSide * 0.018).clamp(14.0, 20.0);
+    final double tagSize = (media.shortestSide * 0.0115).clamp(8.0, 11.0);
     final double gap1 = (media.height * 0.018).clamp(10.0, 22.0);
     final double gap2 = (media.height * 0.012).clamp(6.0, 14.0);
+    final double tagSpacing = (media.width * 0.008).clamp(5.0, 12.0);
+    final double openIconSize = (media.shortestSide * 0.022).clamp(14.0, 22.0);
+    final double borderRadius = (media.shortestSide * 0.018).clamp(8.0, 20.0);
+
+    Widget tag(String label) {
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: tagSpacing,
+          vertical: tagSpacing * 0.4,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Text(
+          label,
+          style: appPoppins(fontSize: tagSize, color: Colors.grey[500]),
+        ),
+      );
+    }
 
     return RepaintBoundary(
       child: MouseRegion(
@@ -2785,9 +2817,7 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
             transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.015),
-              borderRadius: BorderRadius.circular(
-                (media.shortestSide * 0.018).clamp(8.0, 20.0),
-              ),
+              borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
                 color: _hovered
                     ? Colors.white.withValues(alpha: 0.18)
@@ -2796,42 +2826,126 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: widget.fillHeight
-                  ? MainAxisAlignment.spaceBetween
-                  : MainAxisAlignment.center,
               mainAxisSize: widget.fillHeight
                   ? MainAxisSize.max
                   : MainAxisSize.min,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                Row(
                   children: [
                     Icon(
                       Icons.code_rounded,
                       color: _hovered ? Colors.white : Colors.grey[500],
                       size: iconSize,
                     ),
-                    SizedBox(height: gap1),
+                    const Spacer(),
                     Text(
-                      'More on GitHub',
-                      style: TextStyle(
-                        fontSize: titleSize,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: gap2),
-                    Text(
-                      'Game prototypes, AI experiments, and the rest of my builds live on my GitHub profile.',
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: bodySize,
-                        height: 1.6,
+                      'OPEN SOURCE',
+                      style: appPoppins(
+                        fontSize: tagSize,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ],
                 ),
+                SizedBox(height: gap1),
+                Text(
+                  'More on GitHub',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: titleSize,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: gap2),
+                Text(
+                  'Experiments, game jams, and the builds that do not fit in a store listing.',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.grey[500],
+                    fontSize: bodySize,
+                    height: 1.55,
+                  ),
+                ),
+                SizedBox(height: gap1),
+                _GitHubFocusRow(
+                  icon: Icons.sports_esports_rounded,
+                  title: 'Game prototypes',
+                  detail: 'Unity scenes, C# mechanics and camera studies',
+                  hovered: _hovered,
+                  iconSize: rowIconSize,
+                  titleSize: rowTitleSize,
+                  detailSize: rowDetailSize,
+                  gap: tagSpacing,
+                ),
+                Divider(
+                  height: gap1,
+                  thickness: 1,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+                _GitHubFocusRow(
+                  icon: Icons.flutter_dash,
+                  title: 'Flutter experiments',
+                  detail: 'Interaction studies, desktop tools and UI sketches',
+                  hovered: _hovered,
+                  iconSize: rowIconSize,
+                  titleSize: rowTitleSize,
+                  detailSize: rowDetailSize,
+                  gap: tagSpacing,
+                ),
+                Divider(
+                  height: gap1,
+                  thickness: 1,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+                _GitHubFocusRow(
+                  icon: Icons.memory_rounded,
+                  title: 'On-device AI',
+                  detail: 'ML Kit, vision and small-model inference demos',
+                  hovered: _hovered,
+                  iconSize: rowIconSize,
+                  titleSize: rowTitleSize,
+                  detailSize: rowDetailSize,
+                  gap: tagSpacing,
+                ),
+                SizedBox(height: gap1),
+                Wrap(
+                  spacing: tagSpacing,
+                  runSpacing: tagSpacing * 0.6,
+                  children: const [
+                    'Flutter',
+                    'Unity',
+                    'C#',
+                    'ML Kit',
+                    'Open source',
+                  ].map(tag).toList(),
+                ),
+                SizedBox(height: gap1),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      size: rowIconSize,
+                      color: Colors.grey[600],
+                    ),
+                    SizedBox(width: tagSpacing),
+                    Expanded(
+                      child: Text(
+                        'Currently exploring on-device LLMs, game feel and small developer tools.',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: rowDetailSize,
+                          color: Colors.grey[600],
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (widget.fillHeight) const Spacer(),
                 Padding(
                   padding: EdgeInsets.only(top: gap1),
                   child: Row(
@@ -2851,7 +2965,7 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                       Icon(
                         Icons.arrow_outward_rounded,
                         color: _hovered ? Colors.white : Colors.grey[600],
-                        size: (media.shortestSide * 0.022).clamp(14.0, 22.0),
+                        size: openIconSize,
                       ),
                     ],
                   ),
@@ -2861,6 +2975,76 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GitHubFocusRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String detail;
+  final bool hovered;
+  final double iconSize;
+  final double titleSize;
+  final double detailSize;
+  final double gap;
+
+  const _GitHubFocusRow({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.hovered,
+    required this.iconSize,
+    required this.titleSize,
+    required this.detailSize,
+    required this.gap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            icon,
+            size: iconSize,
+            color: hovered ? Colors.white70 : Colors.grey[600],
+          ),
+        ),
+        SizedBox(width: gap),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: titleSize,
+                  fontWeight: FontWeight.w500,
+                  color: hovered ? Colors.grey[200] : Colors.grey[300],
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                detail,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: detailSize,
+                  color: Colors.grey[600],
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
