@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
@@ -39,6 +40,54 @@ double _measureTextWidth(String text, TextStyle style, TextScaler scaler) {
   final double width = painter.width;
   painter.dispose();
   return width;
+}
+
+/// Tracks whether the page is currently moving under the pointer.
+///
+/// Hover effects must not start while the content slides beneath a stationary
+/// cursor. Without this, cards pass under the pointer during a scroll, fire
+/// `onEnter`, and start 200–250 ms transitions — which reads as jitter even
+/// when the scroll itself is running at a steady frame rate.
+class ScrollActivityScope extends InheritedNotifier<ValueNotifier<bool>> {
+  const ScrollActivityScope({
+    super.key,
+    required ValueNotifier<bool> isScrolling,
+    required super.child,
+  }) : super(notifier: isScrolling);
+
+  static bool isScrolling(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<ScrollActivityScope>()
+            ?.notifier
+            ?.value ??
+        false;
+  }
+}
+
+/// Shared hover state that ignores enter events while the page is scrolling.
+mixin _HoverStateMixin<T extends StatefulWidget> on State<T> {
+  bool _hovered = false;
+
+  bool get _hoverBlocked => ScrollActivityScope.isScrolling(context);
+
+  void _handleHoverEnter(PointerEnterEvent _) {
+    if (_hoverBlocked || _hovered) return;
+    setState(() => _hovered = true);
+  }
+
+  void _handleHoverExit(PointerExitEvent _) {
+    if (!_hovered) return;
+    setState(() => _hovered = false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The inherited notifier rebuilds us when scrolling starts. Clearing the
+    // flag here prevents a card that was already hovered from staying lifted
+    // for the whole gesture.
+    if (_hovered && _hoverBlocked) _hovered = false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -457,6 +506,7 @@ class SarthakPortfolio extends StatelessWidget {
 class LensAnimationState extends ChangeNotifier {
   Offset _smoothedPos = const Offset(-1000, -1000);
   Offset _targetPos = const Offset(-1000, -1000);
+  bool _paused = false;
 
   /// On by default so the lens responds to the pointer immediately.
   bool isActive = true;
@@ -469,7 +519,16 @@ class LensAnimationState extends ChangeNotifier {
   void setTarget(Offset pos) {
     if (!isActive) return;
     _targetPos = pos;
-    onWake?.call();
+    if (!_paused) onWake?.call();
+  }
+
+  /// Freezes decorative painting while the page is moving. Scrolling already
+  /// has a full-screen transform every frame; making the lens compete with it
+  /// is what turns a smooth scroll into visible stutter on weaker GPUs.
+  void setPaused(bool value) {
+    if (_paused == value) return;
+    _paused = value;
+    if (!value) onWake?.call();
   }
 
   void toggleActive() {
@@ -480,7 +539,7 @@ class LensAnimationState extends ChangeNotifier {
 
   /// Eases the glow toward the pointer. Returns true while it is still moving.
   bool advance(double dt) {
-    if (!isActive) return false;
+    if (!isActive || _paused) return false;
 
     final double factor = 1 - math.exp(-5.0 * dt);
     _smoothedPos = Offset(
@@ -516,6 +575,7 @@ class _PortfolioHomeState extends State<PortfolioHome> {
   final LensAnimationState _lensState = LensAnimationState();
   final ScrollController _scrollController = _SmoothScrollController();
   final ValueNotifier<String> _activeTab = ValueNotifier<String>('home');
+  final ValueNotifier<bool> _isScrolling = ValueNotifier<bool>(false);
 
   final GlobalKey _heroKey = GlobalKey();
   final GlobalKey _skillsKey = GlobalKey();
@@ -524,6 +584,18 @@ class _PortfolioHomeState extends State<PortfolioHome> {
 
   final Map<GlobalKey, double> _sectionOffsets = <GlobalKey, double>{};
   bool _sectionOffsetsScheduled = false;
+  bool _programmaticScroll = false;
+  double _lastScrollOffset = 0;
+  Timer? _scrollIdleTimer;
+  Timer? _programmaticScrollTimer;
+
+  static const List<String> _tabOrder = <String>[
+    'home',
+    'skills',
+    'experience',
+    'projects',
+  ];
+  static const double _navHysteresis = 28.0;
 
   @override
   void initState() {
@@ -539,18 +611,42 @@ class _PortfolioHomeState extends State<PortfolioHome> {
 
   @override
   void dispose() {
+    _scrollIdleTimer?.cancel();
+    _programmaticScrollTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _lensState.dispose();
     _scrollController.dispose();
     _mouseNotifier.dispose();
     _activeTab.dispose();
+    _isScrolling.dispose();
     super.dispose();
+  }
+
+  void _markScrolling() {
+    if (!_isScrolling.value) _isScrolling.value = true;
+    _lensState.setPaused(true);
+    _scrollIdleTimer?.cancel();
+    _scrollIdleTimer = Timer(const Duration(milliseconds: 140), () {
+      if (!mounted) return;
+      _isScrolling.value = false;
+      _lensState.setPaused(false);
+    });
   }
 
   void _onScroll() {
     if (!mounted || !_scrollController.hasClients) return;
 
     final double scrollOffset = _scrollController.offset;
+    if ((scrollOffset - _lastScrollOffset).abs() > 0.01) {
+      _lastScrollOffset = scrollOffset;
+      _markScrolling();
+    }
+
+    // A nav tap owns the active indicator until its scroll animation ends.
+    // Otherwise the first frame of the animation immediately switches the
+    // indicator back to the section that is still filling the viewport.
+    if (_programmaticScroll) return;
+
     final double triggerLine =
         _scrollController.position.viewportDimension * 0.4;
 
@@ -559,17 +655,55 @@ class _PortfolioHomeState extends State<PortfolioHome> {
         _sectionOffsets[_experienceKey] ?? double.infinity;
     final double skills = _sectionOffsets[_skillsKey] ?? double.infinity;
 
-    String newTab = 'home';
+    String rawTab = 'home';
     if (scrollOffset >= projects - triggerLine) {
-      newTab = 'projects';
+      rawTab = 'projects';
     } else if (scrollOffset >= experience - triggerLine) {
-      newTab = 'experience';
+      rawTab = 'experience';
     } else if (scrollOffset >= skills - triggerLine) {
-      newTab = 'skills';
+      rawTab = 'skills';
     }
 
-    if (newTab != _activeTab.value) {
-      _activeTab.value = newTab;
+    final String currentTab = _activeTab.value;
+    if (rawTab == currentTab) return;
+
+    final int rawIndex = _tabOrder.indexOf(rawTab);
+    final int currentIndex = _tabOrder.indexOf(currentTab);
+    if (rawIndex < 0 || currentIndex < 0) return;
+
+    final bool movingDown = rawIndex > currentIndex;
+    final double boundary = _tabThreshold(
+      movingDown ? rawTab : currentTab,
+      skills: skills,
+      experience: experience,
+      projects: projects,
+      triggerLine: triggerLine,
+    );
+    // A small dead band around each boundary stops the active dot from
+    // flickering when the wheel or scrollbar settles exactly on a threshold.
+    final bool crossed = movingDown
+        ? scrollOffset >= boundary + _navHysteresis
+        : scrollOffset <= boundary - _navHysteresis;
+
+    if (crossed) _activeTab.value = rawTab;
+  }
+
+  double _tabThreshold(
+    String tab, {
+    required double skills,
+    required double experience,
+    required double projects,
+    required double triggerLine,
+  }) {
+    switch (tab) {
+      case 'projects':
+        return projects - triggerLine;
+      case 'experience':
+        return experience - triggerLine;
+      case 'skills':
+        return skills - triggerLine;
+      default:
+        return 0;
     }
   }
 
@@ -607,15 +741,30 @@ class _PortfolioHomeState extends State<PortfolioHome> {
   }
 
   void _scrollTo(GlobalKey key, String tab) {
-    final ctx = key.currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 750),
-        curve: Curves.easeInOutCubic,
-      );
-      _activeTab.value = tab;
-    }
+    final BuildContext? ctx = key.currentContext;
+    if (ctx == null) return;
+
+    _programmaticScroll = true;
+    _activeTab.value = tab;
+    _markScrolling();
+
+    _programmaticScrollTimer?.cancel();
+    _programmaticScrollTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      _programmaticScroll = false;
+      _onScroll();
+    });
+
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 750),
+      curve: Curves.easeInOutCubic,
+    ).whenComplete(() {
+      if (!mounted) return;
+      _programmaticScrollTimer?.cancel();
+      _programmaticScroll = false;
+      _onScroll();
+    });
   }
 
   @override
@@ -633,179 +782,194 @@ class _PortfolioHomeState extends State<PortfolioHome> {
     final double cursorSize = (media.shortestSide * 0.015).clamp(16.0, 32.0);
     final double cursorDotSize = cursorSize * 0.28;
 
-    return Scaffold(
-      body: Listener(
-        onPointerHover: (event) {
-          if (event.kind != PointerDeviceKind.mouse) return;
-          _mouseNotifier.value = event.position;
-          _lensState.setTarget(event.position);
-        },
-        onPointerMove: (event) {
-          if (event.kind != PointerDeviceKind.mouse) return;
-          _mouseNotifier.value = event.position;
-          _lensState.setTarget(event.position);
-        },
-        behavior: HitTestBehavior.translucent,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.none,
-          child: Stack(
-            children: [
-              // ── Background ──────────────────────────────────────────────
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: KineticLensBackground(lensState: _lensState),
-                ),
-              ),
-
-              // ── Main scrollable content ──────────────────────────────────
-              SingleChildScrollView(
-                controller: _scrollController,
-                child: Center(
-                  child: Container(
-                    constraints: BoxConstraints(
-                      // Max content width scales gently with screen width
-                      maxWidth: (media.width * 0.90).clamp(320.0, 1000.0),
-                    ),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: hPad,
-                      vertical: vPad,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        RepaintBoundary(
-                          child: HeroSection(
-                            key: _heroKey,
-                            lensState: _lensState,
-                            media: media,
-                          ),
-                        ),
-                        SizedBox(height: sectionGap),
-                        RepaintBoundary(
-                          child: SkillsSection(key: _skillsKey, media: media),
-                        ),
-                        SizedBox(height: sectionGap),
-                        RepaintBoundary(
-                          child: ExperienceSection(
-                            key: _experienceKey,
-                            media: media,
-                          ),
-                        ),
-                        SizedBox(height: sectionGap),
-                        RepaintBoundary(
-                          child: ProjectsSection(
-                            key: _projectsKey,
-                            media: media,
-                          ),
-                        ),
-                        SizedBox(height: sectionGap * 0.75),
-                        ScrollReveal(
-                          duration: const Duration(milliseconds: 460),
-                          slideFrom: const Offset(0, 16),
-                          scaleFrom: 1.0,
-                          child: const RepaintBoundary(child: Footer()),
-                        ),
-                      ],
-                    ),
+    return ScrollActivityScope(
+      isScrolling: _isScrolling,
+      child: Scaffold(
+        body: Listener(
+          onPointerHover: (event) {
+            if (event.kind != PointerDeviceKind.mouse) return;
+            _mouseNotifier.value = event.position;
+            _lensState.setTarget(event.position);
+          },
+          onPointerMove: (event) {
+            if (event.kind != PointerDeviceKind.mouse) return;
+            _mouseNotifier.value = event.position;
+            _lensState.setTarget(event.position);
+          },
+          behavior: HitTestBehavior.translucent,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.none,
+            child: Stack(
+              children: [
+                // ── Background ──────────────────────────────────────────────
+                Positioned.fill(
+                  child: RepaintBoundary(
+                    child: KineticLensBackground(lensState: _lensState),
                   ),
                 ),
-              ),
 
-              // ── Sidebar nav ──────────────────────────────────────────────
-              if (showSidebar)
-                Positioned(
-                  right: (media.width * 0.032).clamp(16.0, 56.0),
-                  top: 0,
-                  bottom: 0,
+                // ── Main scrollable content ──────────────────────────────────
+                SingleChildScrollView(
+                  controller: _scrollController,
                   child: Center(
-                    child: ValueListenableBuilder<String>(
-                      valueListenable: _activeTab,
-                      builder: (context, activeTab, _) {
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            _NavButton(
-                              label: '01. Intro',
-                              isActive: activeTab == 'home',
-                              onTap: () => _scrollTo(_heroKey, 'home'),
+                    child: Container(
+                      constraints: BoxConstraints(
+                        // Max content width scales gently with screen width
+                        maxWidth: (media.width * 0.90).clamp(320.0, 1000.0),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: hPad,
+                        vertical: vPad,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RepaintBoundary(
+                            child: HeroSection(
+                              key: _heroKey,
+                              lensState: _lensState,
+                              media: media,
                             ),
-                            SizedBox(
-                              height: (media.height * 0.025).clamp(12.0, 32.0),
+                          ),
+                          SizedBox(height: sectionGap),
+                          RepaintBoundary(
+                            child: SkillsSection(key: _skillsKey, media: media),
+                          ),
+                          SizedBox(height: sectionGap),
+                          RepaintBoundary(
+                            child: ExperienceSection(
+                              key: _experienceKey,
+                              media: media,
                             ),
-                            _NavButton(
-                              label: '02. Skills',
-                              isActive: activeTab == 'skills',
-                              onTap: () => _scrollTo(_skillsKey, 'skills'),
+                          ),
+                          SizedBox(height: sectionGap),
+                          RepaintBoundary(
+                            child: ProjectsSection(
+                              key: _projectsKey,
+                              media: media,
                             ),
-                            SizedBox(
-                              height: (media.height * 0.025).clamp(12.0, 32.0),
-                            ),
-                            _NavButton(
-                              label: '03. Experience',
-                              isActive: activeTab == 'experience',
-                              onTap: () =>
-                                  _scrollTo(_experienceKey, 'experience'),
-                            ),
-                            SizedBox(
-                              height: (media.height * 0.025).clamp(12.0, 32.0),
-                            ),
-                            _NavButton(
-                              label: '04. Projects',
-                              isActive: activeTab == 'projects',
-                              onTap: () => _scrollTo(_projectsKey, 'projects'),
-                            ),
-                          ],
-                        );
-                      },
+                          ),
+                          SizedBox(height: sectionGap * 0.75),
+                          ScrollReveal(
+                            duration: const Duration(milliseconds: 460),
+                            slideFrom: const Offset(0, 16),
+                            scaleFrom: 1.0,
+                            child: const RepaintBoundary(child: Footer()),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
 
-              // ── Custom cursor ────────────────────────────────────────────
-              Positioned(
-                left: 0,
-                top: 0,
-                child: ValueListenableBuilder<Offset>(
-                  valueListenable: _mouseNotifier,
-                  builder: (context, mousePos, child) {
-                    return RepaintBoundary(
-                      child: Transform.translate(
-                        offset: Offset(
-                          mousePos.dx - cursorSize / 2,
-                          mousePos.dy - cursorSize / 2,
-                        ),
-                        child: IgnorePointer(
-                          child: Stack(
-                            alignment: Alignment.center,
+                // ── Sidebar nav ──────────────────────────────────────────────
+                if (showSidebar)
+                  Positioned(
+                    right: (media.width * 0.032).clamp(16.0, 56.0),
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: ValueListenableBuilder<String>(
+                        valueListenable: _activeTab,
+                        builder: (context, activeTab, _) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Container(
-                                width: cursorSize,
-                                height: cursorSize,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                  ),
+                              _NavButton(
+                                label: '01. Intro',
+                                isActive: activeTab == 'home',
+                                onTap: () => _scrollTo(_heroKey, 'home'),
+                              ),
+                              SizedBox(
+                                height: (media.height * 0.025).clamp(
+                                  12.0,
+                                  32.0,
                                 ),
                               ),
-                              Container(
-                                width: cursorDotSize,
-                                height: cursorDotSize,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
+                              _NavButton(
+                                label: '02. Skills',
+                                isActive: activeTab == 'skills',
+                                onTap: () => _scrollTo(_skillsKey, 'skills'),
+                              ),
+                              SizedBox(
+                                height: (media.height * 0.025).clamp(
+                                  12.0,
+                                  32.0,
                                 ),
+                              ),
+                              _NavButton(
+                                label: '03. Experience',
+                                isActive: activeTab == 'experience',
+                                onTap: () =>
+                                    _scrollTo(_experienceKey, 'experience'),
+                              ),
+                              SizedBox(
+                                height: (media.height * 0.025).clamp(
+                                  12.0,
+                                  32.0,
+                                ),
+                              ),
+                              _NavButton(
+                                label: '04. Projects',
+                                isActive: activeTab == 'projects',
+                                onTap: () =>
+                                    _scrollTo(_projectsKey, 'projects'),
                               ),
                             ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+
+                // ── Custom cursor ────────────────────────────────────────────
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: ValueListenableBuilder<Offset>(
+                    valueListenable: _mouseNotifier,
+                    builder: (context, mousePos, child) {
+                      return RepaintBoundary(
+                        child: Transform.translate(
+                          offset: Offset(
+                            mousePos.dx - cursorSize / 2,
+                            mousePos.dy - cursorSize / 2,
+                          ),
+                          child: IgnorePointer(
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: cursorSize,
+                                  height: cursorSize,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.3,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  width: cursorDotSize,
+                                  height: cursorDotSize,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1042,9 +1206,8 @@ class _NavButton extends StatefulWidget {
   State<_NavButton> createState() => _NavButtonState();
 }
 
-class _NavButtonState extends State<_NavButton> {
-  bool _hovered = false;
-
+class _NavButtonState extends State<_NavButton>
+    with _HoverStateMixin<_NavButton> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context).size;
@@ -1058,8 +1221,8 @@ class _NavButtonState extends State<_NavButton> {
     return RepaintBoundary(
       child: MouseRegion(
         cursor: SystemMouseCursors.none,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: _handleHoverEnter,
+        onExit: _handleHoverExit,
         child: GestureDetector(
           onTap: widget.onTap,
           child: Row(
@@ -1515,17 +1678,15 @@ class _HeroPill extends StatefulWidget {
   State<_HeroPill> createState() => _HeroPillState();
 }
 
-class _HeroPillState extends State<_HeroPill> {
-  bool _hovered = false;
-
+class _HeroPillState extends State<_HeroPill> with _HoverStateMixin<_HeroPill> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: widget.onTap == null
           ? MouseCursor.defer
           : SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: _handleHoverEnter,
+      onExit: _handleHoverExit,
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
@@ -1572,9 +1733,8 @@ class _HeroActionButton extends StatefulWidget {
   State<_HeroActionButton> createState() => _HeroActionButtonState();
 }
 
-class _HeroActionButtonState extends State<_HeroActionButton> {
-  bool _hovered = false;
-
+class _HeroActionButtonState extends State<_HeroActionButton>
+    with _HoverStateMixin<_HeroActionButton> {
   @override
   Widget build(BuildContext context) {
     final Color background;
@@ -1593,8 +1753,8 @@ class _HeroActionButtonState extends State<_HeroActionButton> {
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: _handleHoverEnter,
+      onExit: _handleHoverExit,
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
@@ -1697,17 +1857,16 @@ class _SocialIconButton extends StatefulWidget {
   State<_SocialIconButton> createState() => _SocialIconButtonState();
 }
 
-class _SocialIconButtonState extends State<_SocialIconButton> {
-  bool _hovered = false;
-
+class _SocialIconButtonState extends State<_SocialIconButton>
+    with _HoverStateMixin<_SocialIconButton> {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: widget.tooltip,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: _handleHoverEnter,
+        onExit: _handleHoverExit,
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
@@ -1959,9 +2118,7 @@ class TiltCard extends StatefulWidget {
   State<TiltCard> createState() => _TiltCardState();
 }
 
-class _TiltCardState extends State<TiltCard> {
-  bool _hovered = false;
-
+class _TiltCardState extends State<TiltCard> with _HoverStateMixin<TiltCard> {
   @override
   Widget build(BuildContext context) {
     final Size media = widget.media;
@@ -1979,8 +2136,8 @@ class _TiltCardState extends State<TiltCard> {
     return RepaintBoundary(
       child: MouseRegion(
         cursor: SystemMouseCursors.none,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: _handleHoverEnter,
+        onExit: _handleHoverExit,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
@@ -2523,9 +2680,8 @@ class _ProjectCard extends StatefulWidget {
   State<_ProjectCard> createState() => _ProjectCardState();
 }
 
-class _ProjectCardState extends State<_ProjectCard> {
-  bool _hovered = false;
-
+class _ProjectCardState extends State<_ProjectCard>
+    with _HoverStateMixin<_ProjectCard> {
   @override
   Widget build(BuildContext context) {
     final _ProjectData project = widget.project;
@@ -2549,8 +2705,8 @@ class _ProjectCardState extends State<_ProjectCard> {
     return RepaintBoundary(
       child: MouseRegion(
         cursor: SystemMouseCursors.none,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: _handleHoverEnter,
+        onExit: _handleHoverExit,
         child: GestureDetector(
           onTap: () => launchUrl(
             Uri.parse(project.link),
@@ -2771,9 +2927,8 @@ class _MoreOnGitHubCard extends StatefulWidget {
   State<_MoreOnGitHubCard> createState() => _MoreOnGitHubCardState();
 }
 
-class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
-  bool _hovered = false;
-
+class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard>
+    with _HoverStateMixin<_MoreOnGitHubCard> {
   @override
   Widget build(BuildContext context) {
     final Size media = widget.media;
@@ -2813,8 +2968,8 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
     return RepaintBoundary(
       child: MouseRegion(
         cursor: SystemMouseCursors.none,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: _handleHoverEnter,
+        onExit: _handleHoverExit,
         child: GestureDetector(
           onTap: () => launchUrl(
             Uri.parse('https://github.com/SarthakGupta2912'),
@@ -3132,14 +3287,13 @@ class _FooterLink extends StatefulWidget {
   State<_FooterLink> createState() => _FooterLinkState();
 }
 
-class _FooterLinkState extends State<_FooterLink> {
-  bool _hovered = false;
-
+class _FooterLinkState extends State<_FooterLink>
+    with _HoverStateMixin<_FooterLink> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: _handleHoverEnter,
+      onExit: _handleHoverExit,
       child: GestureDetector(
         onTap: () => launchUrl(
           Uri.parse(widget.url),

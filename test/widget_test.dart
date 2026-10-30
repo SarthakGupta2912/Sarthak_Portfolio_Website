@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sarthak_portfolio/main.dart';
@@ -144,6 +145,72 @@ void main() {
 
     final Text projectsNav = tester.widget<Text>(find.text('04. Projects'));
     expect(projectsNav.style?.color, const Color(0xFF00E5FF));
+  });
+
+  testWidgets('does not flicker the nav around a section boundary', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    final RenderBox skillsHeader = tester.renderObject<RenderBox>(
+      find.text('02. Arsenal'),
+    );
+    final double skillsOffset = RenderAbstractViewport.of(
+      skillsHeader,
+    ).getOffsetToReveal(skillsHeader, 0.0).offset;
+    final ScrollableState scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable),
+    );
+    final double threshold =
+        skillsOffset - scrollable.position.viewportDimension * 0.4;
+
+    Color navColor(String label) =>
+        tester.widget<Text>(find.text(label)).style!.color!;
+
+    scrollable.position.jumpTo(threshold - 10);
+    await tester.pump();
+    expect(navColor('01. Intro'), const Color(0xFF00E5FF));
+
+    scrollable.position.jumpTo(threshold + 10);
+    await tester.pump();
+    expect(navColor('01. Intro'), const Color(0xFF00E5FF));
+
+    scrollable.position.jumpTo(threshold + 40);
+    await tester.pump();
+    expect(navColor('02. Skills'), const Color(0xFF00E5FF));
+
+    scrollable.position.jumpTo(threshold + 10);
+    await tester.pump();
+    expect(navColor('02. Skills'), const Color(0xFF00E5FF));
+
+    scrollable.position.jumpTo(threshold - 40);
+    await tester.pump();
+    expect(navColor('01. Intro'), const Color(0xFF00E5FF));
+  });
+
+  testWidgets('keeps a tapped nav target active during its scroll', (
+    WidgetTester tester,
+  ) async {
+    _useSize(tester, const Size(1440, 900));
+
+    await tester.pumpWidget(const SarthakPortfolio());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('04. Projects'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final Text projectsNav = tester.widget<Text>(find.text('04. Projects'));
+    expect(projectsNav.style?.color, const Color(0xFF00E5FF));
+
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.text('04. Projects')).style?.color,
+      const Color(0xFF00E5FF),
+    );
   });
 
   testWidgets('pins the project CTAs to the bottom of their cards', (
