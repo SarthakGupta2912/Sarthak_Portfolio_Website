@@ -60,6 +60,8 @@ void main() {
     expect(find.text('LIMS'), findsOneWidget);
     expect(find.text('PathKosh'), findsOneWidget);
     expect(find.text('More on GitHub'), findsOneWidget);
+    expect(find.text('Unity algorithm visualizers'), findsOneWidget);
+    expect(find.text('DSA & core coding'), findsOneWidget);
   });
 
   testWidgets('has no idle animations after the page settles', (
@@ -93,6 +95,13 @@ void main() {
       lens.top,
       reason: 'both pills should stay on one row on desktop',
     );
+  });
+
+  test('lens illusion starts enabled', () {
+    final LensAnimationState lens = LensAnimationState();
+    addTearDown(lens.dispose);
+
+    expect(lens.isActive, isTrue);
   });
 
   testWidgets('lens toggle settles without leaving a running animation', (

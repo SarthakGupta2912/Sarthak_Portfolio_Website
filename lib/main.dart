@@ -458,8 +458,8 @@ class LensAnimationState extends ChangeNotifier {
   Offset _smoothedPos = const Offset(-1000, -1000);
   Offset _targetPos = const Offset(-1000, -1000);
 
-  /// Off by default: most visitors only need the static dot grid.
-  bool isActive = false;
+  /// On by default so the lens responds to the pointer immediately.
+  bool isActive = true;
 
   /// Called when the pointer moves so the background can wake its ticker.
   VoidCallback? onWake;
@@ -2872,7 +2872,7 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                 ),
                 SizedBox(height: gap2),
                 Text(
-                  'Experiments, game jams, and the builds that do not fit in a store listing.',
+                  'Algorithm visualizers, Flutter experiments and the builds that do not fit in a store listing.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     color: Colors.grey[500],
@@ -2883,8 +2883,8 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                 SizedBox(height: gap1),
                 _GitHubFocusRow(
                   icon: Icons.sports_esports_rounded,
-                  title: 'Game prototypes',
-                  detail: 'Unity scenes, C# mechanics and camera studies',
+                  title: 'Unity algorithm visualizers',
+                  detail: 'Disk scheduling plus C# quiz and word games',
                   hovered: _hovered,
                   iconSize: rowIconSize,
                   titleSize: rowTitleSize,
@@ -2898,8 +2898,8 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                 ),
                 _GitHubFocusRow(
                   icon: Icons.flutter_dash,
-                  title: 'Flutter experiments',
-                  detail: 'Interaction studies, desktop tools and UI sketches',
+                  title: 'Flutter packages & apps',
+                  detail: 'kinetic_lens_effect, contacts and task apps',
                   hovered: _hovered,
                   iconSize: rowIconSize,
                   titleSize: rowTitleSize,
@@ -2912,9 +2912,9 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                   color: Colors.white.withValues(alpha: 0.05),
                 ),
                 _GitHubFocusRow(
-                  icon: Icons.memory_rounded,
-                  title: 'On-device AI',
-                  detail: 'ML Kit, vision and small-model inference demos',
+                  icon: Icons.account_tree_rounded,
+                  title: 'DSA & core coding',
+                  detail: 'Search, arrays, randomization and OOP in C/C++/Java',
                   hovered: _hovered,
                   iconSize: rowIconSize,
                   titleSize: rowTitleSize,
@@ -2929,8 +2929,9 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                     'Flutter',
                     'Unity',
                     'C#',
-                    'ML Kit',
-                    'Open source',
+                    'Dart',
+                    'C/C++',
+                    'DSA',
                   ].map(tag).toList(),
                 ),
                 SizedBox(height: gap1),
@@ -2945,7 +2946,7 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                     SizedBox(width: tagSpacing),
                     Expanded(
                       child: Text(
-                        'Currently exploring on-device LLMs, game feel and small developer tools.',
+                        'Currently exploring algorithm visualization, shader-driven UI and developer tooling.',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: rowDetailSize,
