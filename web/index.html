@@ -43,6 +43,9 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://www.gstatic.com">
   <link rel="preload" href="main.dart.js" as="script">
+  <link rel="preload" href="flutter_bootstrap.js" as="script">
+  <link rel="preload" href="assets/FontManifest.json" as="fetch" crossorigin>
+  <link rel="preload" href="assets/AssetManifest.bin.json" as="fetch" crossorigin>
   <link rel="preload" href="assets/assets/fonts/Inter-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="preload" href="assets/assets/fonts/Inter-Medium.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="preload" href="assets/assets/fonts/Inter-Bold.ttf" as="font" type="font/ttf" crossorigin>
@@ -76,6 +79,16 @@
         '83675ed27633283e7fc296c8bca22e841224c096' +
         '/chromium/canvaskit.wasm';
       document.head.appendChild(link);
+
+      var script = document.createElement('link');
+      script.rel = 'preload';
+      script.as = 'script';
+      script.crossOrigin = 'anonymous';
+      script.href =
+        'https://www.gstatic.com/flutter-canvaskit/' +
+        '83675ed27633283e7fc296c8bca22e841224c096' +
+        '/chromium/canvaskit.js';
+      document.head.appendChild(script);
     })();
   </script>
 

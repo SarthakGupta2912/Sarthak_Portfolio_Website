@@ -1164,69 +1164,80 @@ class HeroSection extends StatelessWidget {
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _HeroPill(
-              key: const Key('hero-availability-pill'),
-              width: pillWidth,
-              height: pillHeight,
-              hPad: pillHPad,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const _StatusDot(size: 7),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      availabilityLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: appPoppins(
-                        fontSize: pillFontSize,
-                        color: Colors.grey[300],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ListenableBuilder(
-              listenable: lensState,
-              builder: (_, _) => _HeroPill(
-                key: const Key('hero-lens-pill'),
-                width: pillWidth,
-                height: pillHeight,
-                hPad: pillHPad,
-                onTap: lensState.toggleActive,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      lensState.isActive
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: pillFontSize + 4,
-                      color: Colors.grey[500],
-                    ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        'Lens illusion',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: appPoppins(
-                          fontSize: pillFontSize,
-                          color: Colors.grey[400],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Keep the pair on one line on desktop. The text measurement has
+            // extra headroom for late web-font metrics, so cap the shared width
+            // to the space actually available for both pills.
+            final double fittedPillWidth = math.min(
+              pillWidth,
+              math.max(0.0, (constraints.maxWidth - 10) / 2),
+            );
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HeroPill(
+                  key: const Key('hero-availability-pill'),
+                  width: fittedPillWidth,
+                  height: pillHeight,
+                  hPad: pillHPad,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _StatusDot(size: 7),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          availabilityLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: appPoppins(
+                            fontSize: pillFontSize,
+                            color: Colors.grey[300],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+                ListenableBuilder(
+                  listenable: lensState,
+                  builder: (_, _) => _HeroPill(
+                    key: const Key('hero-lens-pill'),
+                    width: fittedPillWidth,
+                    height: pillHeight,
+                    hPad: pillHPad,
+                    onTap: lensState.toggleActive,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          lensState.isActive
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          size: pillFontSize + 4,
+                          color: Colors.grey[500],
+                        ),
+                        const SizedBox(width: 7),
+                        Flexible(
+                          child: Text(
+                            'Lens illusion',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: appPoppins(
+                              fontSize: pillFontSize,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         SizedBox(height: gapBadge),
         Row(

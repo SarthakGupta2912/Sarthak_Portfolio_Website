@@ -81,13 +81,18 @@ void main() {
     await tester.pumpWidget(const SarthakPortfolio());
     await tester.pumpAndSettle();
 
-    final Size availability = tester.getSize(
+    final Rect availability = tester.getRect(
       find.byKey(const Key('hero-availability-pill')),
     );
-    final Size lens = tester.getSize(find.byKey(const Key('hero-lens-pill')));
+    final Rect lens = tester.getRect(find.byKey(const Key('hero-lens-pill')));
 
     expect(availability.height, lens.height);
-    expect(availability.width, lens.width);
+    expect(availability.width, moreOrLessEquals(lens.width));
+    expect(
+      availability.top,
+      lens.top,
+      reason: 'both pills should stay on one row on desktop',
+    );
   });
 
   testWidgets('lens toggle settles without leaving a running animation', (
