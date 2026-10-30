@@ -2884,7 +2884,7 @@ class _MoreOnGitHubCardState extends State<_MoreOnGitHubCard> {
                 _GitHubFocusRow(
                   icon: Icons.sports_esports_rounded,
                   title: 'Unity algorithm visualizers',
-                  detail: 'Disk scheduling plus C# quiz and word games',
+                  detail: 'FCFS, SSTF, SCAN and LOOK + C# quiz games',
                   hovered: _hovered,
                   iconSize: rowIconSize,
                   titleSize: rowTitleSize,
